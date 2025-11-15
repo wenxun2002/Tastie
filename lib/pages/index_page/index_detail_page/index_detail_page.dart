@@ -5,10 +5,31 @@ import 'package:get/get.dart';
 import 'package:tastie/common/utils/date_utils.dart';
 import 'package:tastie/common/utils/image_utils.dart';
 import 'package:tastie/constants/color_plate.dart';
+import 'package:tastie/models/card_detail_data.dart';
 import 'package:tastie/pages/index_page/index_detail_page/index_detail_controller.dart';
 
-class IndexDetailPage extends StatelessWidget {
+class IndexDetailPage extends StatefulWidget {
   const IndexDetailPage({super.key});
+
+  @override
+  State<IndexDetailPage> createState() => _IndexDetailPageState();
+}
+
+class _IndexDetailPageState extends State<IndexDetailPage>
+    with SingleTickerProviderStateMixin {
+  late TabController _tabController;
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 2, vsync: this);
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -80,22 +101,46 @@ class IndexDetailPage extends StatelessWidget {
             ],
           ),
           backgroundColor: ColorPlate.backgroundWhite,
-          body: SafeArea(
-            child: Column(
-              children: [
-                Expanded(
-                  child: ListView(
-                    children: [
-                      buildImageSwiper(controller),
-                      buildContent(controller),
-                      buildComment(controller),
-                    ],
+          body: NestedScrollView(
+            headerSliverBuilder:
+                (BuildContext context, bool innerBoxIsScrolled) {
+              return [
+                // Image Carousel
+                SliverToBoxAdapter(
+                  child: buildImageSwiper(controller),
+                ),
+                // Title, Content, Tags, Date
+                SliverToBoxAdapter(
+                  child: buildContent(controller),
+                ),
+                // TabBar
+                SliverPersistentHeader(
+                  pinned: true,
+                  delegate: _SliverAppBarDelegate(
+                    TabBar(
+                      controller: _tabController,
+                      labelColor: Colors.black,
+                      unselectedLabelColor: ColorPlate.textSecondary,
+                      dividerColor: Colors.transparent,
+                      indicatorColor: ColorPlate.primary,
+                      tabs: const [
+                        Tab(text: "Ingredients"),
+                        Tab(text: "Procedures"),
+                      ],
+                    ),
                   ),
                 ),
-                buildBottom(controller),
+              ];
+            },
+            body: TabBarView(
+              controller: _tabController,
+              children: [
+                buildIngredientsTab(controller),
+                buildProceduresTab(controller),
               ],
             ),
           ),
+          bottomNavigationBar: buildBottom(controller),
         );
       },
     );
@@ -147,8 +192,8 @@ class IndexDetailPage extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.only(top: 8.0, bottom: 8.0),
               child: Wrap(
-                spacing: 8.0, // 标签之间的间距
-                runSpacing: 8.0, // 行之间的间距
+                spacing: 8.0,
+                runSpacing: 8.0,
                 children: controller.cardDetailData.tags.map((tag) {
                   return Container(
                     padding: const EdgeInsets.symmetric(
@@ -156,7 +201,7 @@ class IndexDetailPage extends StatelessWidget {
                       vertical: 4.0,
                     ),
                     decoration: BoxDecoration(
-                      color: ColorPlate.secondary, // 背景色为 secondary
+                      color: ColorPlate.secondary,
                       borderRadius: BorderRadius.circular(10),
                       border: Border.all(
                         color: ColorPlate.primary,
@@ -165,7 +210,7 @@ class IndexDetailPage extends StatelessWidget {
                     ),
                     child: Text(
                       "#$tag",
-                      style: ColorPlate.tagText, // 文字颜色为 primary
+                      style: ColorPlate.tagText,
                       textAlign: TextAlign.center,
                     ),
                   );
@@ -179,120 +224,222 @@ class IndexDetailPage extends StatelessWidget {
               style: ColorPlate.caption,
             ),
           ),
-          const Divider(thickness: 0.5),
         ],
       ),
     );
   }
 
-  Widget buildComment(IndexDetailController controller) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12.0),
+  Widget buildIngredientsTab(IndexDetailController controller) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.symmetric(horizontal: 10.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            "${controller.commentList.length} Comments",
-            style: ColorPlate.bodyTextSmall.copyWith(
-              color: ColorPlate.textSecondary,
-            ),
-          ),
-          ...controller.commentList.map((e) {
-            return Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8.0),
+          // Ingredients List
+          ...controller.cardDetailData.ingredients.map<Widget>((ingredient) {
+            return Container(
+              decoration: BoxDecoration(
+                border: Border(
+                  bottom: BorderSide(
+                    color: ColorPlate.borderGrey.withOpacity(0.7),
+                    width: 1.5,
+                  ),
+                ),
+              ),
+              padding: const EdgeInsets.symmetric(vertical: 10.0),
               child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  SizedBox(
-                    width: 40,
-                    height: 40,
-                    child: ClipOval(
-                      child: ImageUtils.loadImage(
-                        e.avatar,
-                        fit: BoxFit.cover,
-                      ),
+                  Expanded(
+                    child: Text(
+                      ingredient.name,
+                      style: ColorPlate.bodyText,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                  Expanded(
-                    child: Container(
-                      padding: const EdgeInsets.only(bottom: 14),
-                      decoration: const BoxDecoration(
-                        border: Border(
-                          bottom: BorderSide(
-                            color: ColorPlate.borderGrey,
-                            width: 0.5,
-                          ),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (ingredient.amount > 0)
+                        Text(
+                          ingredient.amount.toString(),
+                          style: ColorPlate.bodyText,
                         ),
+                      const SizedBox(width: 5),
+                      Text(
+                        ingredient.unit,
+                        style: ColorPlate.bodyText,
                       ),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(
-                            child: Padding(
-                              padding: const EdgeInsets.only(left: 8.0),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    e.nickname,
-                                    style: ColorPlate.heading3.copyWith(
-                                      color: ColorPlate.textSecondary,
-                                    ),
-                                  ),
-                                  RichText(
-                                    text: TextSpan(
-                                      style: ColorPlate.bodyText,
-                                      text: e.content,
-                                      children: [
-                                        TextSpan(
-                                          text:
-                                              "  ${SDateUtils.formatDate(e.createDate)}",
-                                          style: ColorPlate.caption,
-                                        ),
-                                        TextSpan(
-                                          text: "  Reply",
-                                          style: ColorPlate.bodyText,
-                                          recognizer: TapGestureRecognizer()
-                                            ..onTap = () {
-                                              debugPrint("Reply");
-                                            },
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                          GestureDetector(
-                            onTap: () {
-                              controller.toggleCommentLike(e.id);
-                            },
-                            child: Column(
-                              children: [
-                                Icon(
-                                  controller.commentLikedMap[e.id] == true
-                                      ? Icons.favorite
-                                      : Icons.favorite_border,
-                                  size: 20,
-                                  color:
-                                      controller.commentLikedMap[e.id] == true
-                                          ? Colors.red
-                                          : Colors.grey,
-                                ),
-                                Text(e.like.toString()),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
+                    ],
                   ),
                 ],
               ),
             );
-          }),
+          }).toList(),
+          const SizedBox(height: 15),
+          // Nutrition Info Section
+          if (controller.cardDetailData.nutrition != null)
+            _NutritionSection(
+              nutrition: controller.cardDetailData.nutrition!,
+            ),
         ],
+      ),
+    );
+  }
+
+  Widget buildProceduresTab(IndexDetailController controller) {
+    return ListView.builder(
+      padding: const EdgeInsets.symmetric(horizontal: 10.0, vertical: 5.0),
+      itemCount: controller.cardDetailData.procedures.length,
+      itemBuilder: (context, index) {
+        final step = controller.cardDetailData.procedures[index];
+        return Container(
+          margin: const EdgeInsets.only(bottom: 5.0),
+          padding: const EdgeInsets.all(10.0),
+          decoration: BoxDecoration(
+            color: ColorPlate.secondary,
+            borderRadius: BorderRadius.circular(4),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 30,
+                alignment: Alignment.topCenter,
+                child: Text(
+                  "${index + 1}",
+                  style: ColorPlate.heading2.copyWith(
+                    color: ColorPlate.primary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 20),
+              Expanded(
+                child: Text(
+                  step,
+                  style: ColorPlate.bodyText,
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  // Hidden comment section (kept for future use)
+  Widget buildComment(IndexDetailController controller) {
+    return Visibility(
+      visible: false, // Hidden but code structure preserved
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              "${controller.commentList.length} Comments",
+              style: ColorPlate.bodyTextSmall.copyWith(
+                color: ColorPlate.textSecondary,
+              ),
+            ),
+            ...controller.commentList.map((e) {
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8.0),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SizedBox(
+                      width: 40,
+                      height: 40,
+                      child: ClipOval(
+                        child: ImageUtils.loadImage(
+                          e.avatar,
+                          fit: BoxFit.cover,
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      child: Container(
+                        padding: const EdgeInsets.only(bottom: 14),
+                        decoration: const BoxDecoration(
+                          border: Border(
+                            bottom: BorderSide(
+                              color: ColorPlate.borderGrey,
+                              width: 0.5,
+                            ),
+                          ),
+                        ),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              child: Padding(
+                                padding: const EdgeInsets.only(left: 8.0),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      e.nickname,
+                                      style: ColorPlate.heading3.copyWith(
+                                        color: ColorPlate.textSecondary,
+                                      ),
+                                    ),
+                                    RichText(
+                                      text: TextSpan(
+                                        style: ColorPlate.bodyText,
+                                        text: e.content,
+                                        children: [
+                                          TextSpan(
+                                            text:
+                                                "  ${SDateUtils.formatDate(e.createDate)}",
+                                            style: ColorPlate.caption,
+                                          ),
+                                          TextSpan(
+                                            text: "  Reply",
+                                            style: ColorPlate.bodyText,
+                                            recognizer: TapGestureRecognizer()
+                                              ..onTap = () {
+                                                debugPrint("Reply");
+                                              },
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                            GestureDetector(
+                              onTap: () {
+                                controller.toggleCommentLike(e.id);
+                              },
+                              child: Column(
+                                children: [
+                                  Icon(
+                                    controller.commentLikedMap[e.id] == true
+                                        ? Icons.favorite
+                                        : Icons.favorite_border,
+                                    size: 20,
+                                    color:
+                                        controller.commentLikedMap[e.id] == true
+                                            ? Colors.red
+                                            : Colors.grey,
+                                  ),
+                                  Text(e.like.toString()),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }),
+          ],
+        ),
       ),
     );
   }
@@ -347,7 +494,6 @@ class IndexDetailPage extends StatelessWidget {
     Widget buildCommentIcon(int count) {
       return GestureDetector(
         onTap: () {
-          // 打开评论输入框
           debugPrint("Comment clicked");
         },
         child: Row(
@@ -407,6 +553,138 @@ class IndexDetailPage extends StatelessWidget {
           buildFavoriteIcon(controller.cardDetailData.fav),
           const SizedBox(width: 4),
           buildCommentIcon(controller.cardDetailData.comment),
+        ],
+      ),
+    );
+  }
+}
+
+// SliverPersistentHeader delegate for TabBar
+class _SliverAppBarDelegate extends SliverPersistentHeaderDelegate {
+  final TabBar tabBar;
+
+  _SliverAppBarDelegate(this.tabBar);
+
+  @override
+  double get minExtent => tabBar.preferredSize.height;
+
+  @override
+  double get maxExtent => tabBar.preferredSize.height;
+
+  @override
+  Widget build(
+      BuildContext context, double shrinkOffset, bool overlapsContent) {
+    return Container(
+      color: ColorPlate.backgroundWhite,
+      child: tabBar,
+    );
+  }
+
+  @override
+  bool shouldRebuild(_SliverAppBarDelegate oldDelegate) {
+    return false;
+  }
+}
+
+// Nutrition Section with expandable animation
+class _NutritionSection extends StatefulWidget {
+  final Nutrition nutrition;
+
+  const _NutritionSection({required this.nutrition});
+
+  @override
+  State<_NutritionSection> createState() => _NutritionSectionState();
+}
+
+class _NutritionSectionState extends State<_NutritionSection> {
+  bool _isExpanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Header with toggle button
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              "Nutrition info",
+              style: ColorPlate.heading2.copyWith(
+                fontWeight: FontWeight.w600,
+                color: ColorPlate.textPrimary,
+              ),
+            ),
+            TextButton.icon(
+              onPressed: () {
+                setState(() {
+                  _isExpanded = !_isExpanded;
+                });
+              },
+              icon: Icon(
+                _isExpanded ? Icons.remove : Icons.add,
+                size: 20,
+                color: ColorPlate.primary,
+              ),
+              label: Text(
+                _isExpanded ? "View Less" : "View More",
+                style: ColorPlate.bodyTextSmall.copyWith(
+                  color: ColorPlate.primary,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+        ),
+        // Expandable nutrition table
+        AnimatedCrossFade(
+          firstChild: const SizedBox.shrink(),
+          secondChild: Column(
+            children: [
+              _buildNutritionRow(
+                  "Calories", widget.nutrition.calories.toString()),
+              _buildNutritionRow("Fat", "${widget.nutrition.fat.toInt()} g"),
+              _buildNutritionRow(
+                  "Carbohydrates", "${widget.nutrition.carbs.toInt()} g"),
+              _buildNutritionRow(
+                  "Fiber", "${widget.nutrition.fiber.toInt()} g"),
+              _buildNutritionRow(
+                  "Sugar", "${widget.nutrition.sugar.toInt()} g"),
+              _buildNutritionRow(
+                  "Protein", "${widget.nutrition.protein.toInt()} g"),
+            ],
+          ),
+          crossFadeState: _isExpanded
+              ? CrossFadeState.showSecond
+              : CrossFadeState.showFirst,
+          duration: const Duration(milliseconds: 300),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildNutritionRow(String label, String value) {
+    return Container(
+      decoration: BoxDecoration(
+        border: Border(
+          bottom: BorderSide(
+            color: ColorPlate.borderGrey.withOpacity(0.7),
+            width: 1.5,
+          ),
+        ),
+      ),
+      padding: const EdgeInsets.symmetric(vertical: 10.0),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            label,
+            style: ColorPlate.bodyText,
+          ),
+          Text(
+            value,
+            style: ColorPlate.bodyText,
+          ),
         ],
       ),
     );

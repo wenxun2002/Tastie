@@ -7,6 +7,41 @@ class MockCardDetail {
     return title.split(',').map((tag) => tag.trim()).toList();
   }
 
+  // 生成示例配料列表
+  static List<Ingredient> _generateIngredients() {
+    return [
+      Ingredient(name: "Sugar", amount: 200, unit: "g"),
+      Ingredient(name: "Butter", amount: 500, unit: "g"),
+      Ingredient(name: "Egg", amount: 1, unit: "pcs"),
+      Ingredient(name: "Cake Flour", amount: 1.2, unit: "kg"),
+      Ingredient(name: "Vanilla extract", amount: 0, unit: "few drops"),
+      Ingredient(name: "Milk", amount: 1200, unit: "ml"),
+      Ingredient(name: "Water", amount: 2, unit: "spoons"),
+      Ingredient(name: "Garlic, minced", amount: 20, unit: "g"),
+    ];
+  }
+
+  // 生成示例步骤列表
+  static List<String> _generateProcedures() {
+    return [
+      "Combine cake mix, chocolate chips, oil, and eggs in a mixing bowl.",
+      "Using an ice cream scoop or your hand, form golf ball-sized balls of cookie dough and transfer to a parchment paper-lined baking sheet.",
+      "Bake at 350°C for 10-12 minutes.",
+    ];
+  }
+
+  // 生成示例营养信息
+  static Nutrition _generateNutrition() {
+    return Nutrition(
+      calories: 500,
+      fat: 8,
+      carbs: 37,
+      fiber: 28,
+      sugar: 23,
+      protein: 3,
+    );
+  }
+
   static List<CardDetailData> cardDetailDataList = [
     CardDetailData(
       id: 1,
@@ -26,6 +61,9 @@ class MockCardDetail {
         "assets/images/Cover/Comfort.png",
       ],
       tags: _generateTagsFromTitle("Comfort"),
+      ingredients: _generateIngredients(),
+      procedures: _generateProcedures(),
+      nutrition: _generateNutrition(),
     ),
     CardDetailData(
       id: 2,
@@ -46,6 +84,9 @@ class MockCardDetail {
         "assets/images/Cover/Cooling,Hydrating,Light.png",
       ],
       tags: _generateTagsFromTitle("Cooling, Hydrating, Light"),
+      ingredients: _generateIngredients(),
+      procedures: _generateProcedures(),
+      nutrition: _generateNutrition(),
     ),
     CardDetailData(
       id: 3,
@@ -64,6 +105,9 @@ class MockCardDetail {
         "assets/images/Cover/Cooling,Hydrating.png",
       ],
       tags: _generateTagsFromTitle("Cooling, Hydrating"),
+      ingredients: _generateIngredients(),
+      procedures: _generateProcedures(),
+      nutrition: _generateNutrition(),
     ),
     CardDetailData(
       id: 4,
@@ -82,6 +126,9 @@ class MockCardDetail {
         "assets/images/Cover/Energy,Comfort.png",
       ],
       tags: _generateTagsFromTitle("Energy, Comfort"),
+      ingredients: _generateIngredients(),
+      procedures: _generateProcedures(),
+      nutrition: _generateNutrition(),
     ),
     CardDetailData(
       id: 5,
@@ -103,6 +150,9 @@ class MockCardDetail {
         "assets/images/Cover/Energy.png",
       ],
       tags: _generateTagsFromTitle("Energy"),
+      ingredients: _generateIngredients(),
+      procedures: _generateProcedures(),
+      nutrition: _generateNutrition(),
     ),
     CardDetailData(
       id: 6,
@@ -124,6 +174,9 @@ class MockCardDetail {
         "assets/images/Cover/Hydrating,Cooling.png",
       ],
       tags: _generateTagsFromTitle("Hydrating, Cooling"),
+      ingredients: _generateIngredients(),
+      procedures: _generateProcedures(),
+      nutrition: _generateNutrition(),
     ),
     CardDetailData(
       id: 7,
@@ -142,6 +195,9 @@ class MockCardDetail {
         "assets/images/Cover/Hydrating.png",
       ],
       tags: _generateTagsFromTitle("Hydrating"),
+      ingredients: _generateIngredients(),
+      procedures: _generateProcedures(),
+      nutrition: _generateNutrition(),
     ),
     CardDetailData(
       id: 8,
@@ -161,6 +217,9 @@ class MockCardDetail {
         "assets/images/Cover/Light,Comfort.png",
       ],
       tags: _generateTagsFromTitle("Light, Comfort"),
+      ingredients: _generateIngredients(),
+      procedures: _generateProcedures(),
+      nutrition: _generateNutrition(),
     ),
     CardDetailData(
       id: 9,
@@ -179,6 +238,9 @@ class MockCardDetail {
         "assets/images/Cover/Light,Hydrating.png",
       ],
       tags: _generateTagsFromTitle("Light, Hydrating"),
+      ingredients: _generateIngredients(),
+      procedures: _generateProcedures(),
+      nutrition: _generateNutrition(),
     ),
     CardDetailData(
       id: 10,
@@ -199,6 +261,9 @@ class MockCardDetail {
         "assets/images/Cover/Light,Warming.png",
       ],
       tags: _generateTagsFromTitle("Light, Warming"),
+      ingredients: _generateIngredients(),
+      procedures: _generateProcedures(),
+      nutrition: _generateNutrition(),
     ),
     CardDetailData(
       id: 11,
@@ -217,6 +282,9 @@ class MockCardDetail {
         "assets/images/Cover/Warming,Comfort 2.png",
       ],
       tags: _generateTagsFromTitle("Warming, Comfort"),
+      ingredients: _generateIngredients(),
+      procedures: _generateProcedures(),
+      nutrition: _generateNutrition(),
     ),
     CardDetailData(
       id: 12,
@@ -236,6 +304,9 @@ class MockCardDetail {
         "assets/images/Cover/Warming,Comfort.png",
       ],
       tags: _generateTagsFromTitle("Warming, Comfort"),
+      ingredients: _generateIngredients(),
+      procedures: _generateProcedures(),
+      nutrition: _generateNutrition(),
     ),
     CardDetailData(
       id: 13,
@@ -254,6 +325,9 @@ class MockCardDetail {
         "assets/images/Cover/Warming,Energy,Comfort.png",
       ],
       tags: _generateTagsFromTitle("Warming, Energy, Comfort"),
+      ingredients: _generateIngredients(),
+      procedures: _generateProcedures(),
+      nutrition: _generateNutrition(),
     ),
     CardDetailData(
       id: 14,
@@ -274,6 +348,9 @@ class MockCardDetail {
         "assets/images/Cover/Warming.png",
       ],
       tags: _generateTagsFromTitle("Warming"),
+      ingredients: _generateIngredients(),
+      procedures: _generateProcedures(),
+      nutrition: _generateNutrition(),
     ),
   ];
 
