@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'package:flutter/services.dart';
+
 /// Weather category enum
 ///
 /// Represents different weather conditions that affect food recommendations
@@ -21,6 +24,28 @@ enum WeatherCategory {
   stormy,
 }
 
+/// Parse a string key to WeatherCategory enum
+///
+/// Returns the corresponding WeatherCategory, or throws an exception if the key is invalid.
+WeatherCategory parseCategory(String key) {
+  switch (key) {
+    case 'hotHumid':
+      return WeatherCategory.hotHumid;
+    case 'hotDry':
+      return WeatherCategory.hotDry;
+    case 'rainy':
+      return WeatherCategory.rainy;
+    case 'cold':
+      return WeatherCategory.cold;
+    case 'neutral':
+      return WeatherCategory.neutral;
+    case 'stormy':
+      return WeatherCategory.stormy;
+    default:
+      throw ArgumentError('Invalid weather category key: $key');
+  }
+}
+
 /// WeatherCategory → (tagName → weight)
 ///
 /// Weight mapping for food tags based on weather conditions.
@@ -29,73 +54,49 @@ enum WeatherCategory {
 /// - 1.0 = very strong priority for this tag under that weather condition
 /// - 0.0 or missing = no preference
 /// - Negative values can be used to indicate avoidance (will be clamped to 0.0 if needed)
-const Map<WeatherCategory, Map<String, double>> kWeatherTagWeight = {
-  // Hot & Humid Weather
-  // High temperature with high humidity - prefer cooling, hydrating, and light foods
-  WeatherCategory.hotHumid: {
-    'Cooling': 1.0,
-    'Hydrating': 0.9,
-    'Light': 0.7,
-    'Energy': 0.1,
-    'Warming': -0.3, // Negative indicates avoidance
-    'Comfort': 0.2,
-  },
+///
+/// This is loaded dynamically from JSON on app start.
+/// For Firebase integration, replace WeatherWeightRepository.load() with Firebase loader.
+late Map<WeatherCategory, Map<String, double>> weatherWeights;
 
-  // Hot but Dry Weather
-  // High temperature with low humidity - hydrating is most important
-  WeatherCategory.hotDry: {
-    'Cooling': 0.7,
-    'Hydrating': 1.0,
-    'Light': 0.6,
-    'Energy': 0.2,
-    'Warming': 0.0,
-    'Comfort': 0.2,
-  },
+/// Repository for loading weather tag weights from JSON
+///
+/// This mimics a future Firebase schema structure.
+/// To integrate with Firebase, replace the load() method to fetch from Firebase instead.
+class WeatherWeightRepository {
+  /// Load weather weights from JSON file
+  ///
+  /// Returns a map of WeatherCategory to tag weights.
+  /// Throws an exception if the JSON file cannot be loaded or parsed.
+  Future<Map<WeatherCategory, Map<String, double>>> load() async {
+    try {
+      final String jsonString = await rootBundle.loadString(
+        'assets/config/weather_tag_weight.json',
+      );
+      final Map<String, dynamic> jsonData = json.decode(jsonString);
 
-  // Rainy Weather
-  // Rainy, slightly cooler, high humidity - prefer warming and comfort foods
-  WeatherCategory.rainy: {
-    'Cooling': 0.1,
-    'Hydrating': 0.3,
-    'Light': 0.4,
-    'Energy': 0.6,
-    'Warming': 1.0,
-    'Comfort': 0.9,
-  },
+      final Map<WeatherCategory, Map<String, double>> result = {};
 
-  // Cold Weather
-  // Low temperature - prefer warming and energy foods
-  WeatherCategory.cold: {
-    'Cooling': 0.0,
-    'Hydrating': 0.2,
-    'Light': 0.3,
-    'Energy': 1.0,
-    'Warming': 1.0,
-    'Comfort': 0.7,
-  },
+      for (final entry in jsonData.entries) {
+        final category = parseCategory(entry.key);
+        final tagWeights = <String, double>{};
 
-  // Neutral Weather
-  // Normal/comfortable weather - balanced mix, all tags have medium priority
-  WeatherCategory.neutral: {
-    'Cooling': 0.5,
-    'Hydrating': 0.5,
-    'Light': 0.5,
-    'Energy': 0.5,
-    'Warming': 0.5,
-    'Comfort': 0.5,
-  },
+        if (entry.value is Map) {
+          final tagMap = entry.value as Map<String, dynamic>;
+          for (final tagEntry in tagMap.entries) {
+            tagWeights[tagEntry.key] = (tagEntry.value as num).toDouble();
+          }
+        }
 
-  // Stormy Weather
-  // Thunderstorm/very heavy rain - comfort and warming are strongly preferred
-  WeatherCategory.stormy: {
-    'Cooling': 0.0,
-    'Hydrating': 0.3,
-    'Light': 0.3,
-    'Energy': 0.6,
-    'Warming': 1.0,
-    'Comfort': 1.0,
-  },
-};
+        result[category] = tagWeights;
+      }
+
+      return result;
+    } catch (e) {
+      throw Exception('Failed to load weather tag weights: $e');
+    }
+  }
+}
 
 /// Get the weight for a specific tag under a given weather category
 ///
@@ -117,7 +118,7 @@ double getTagWeight({
   required WeatherCategory weather,
   required String tag,
 }) {
-  final weights = kWeatherTagWeight[weather];
+  final weights = weatherWeights[weather];
   if (weights == null) return 0.0;
   return weights[tag] ?? 0.0;
 }

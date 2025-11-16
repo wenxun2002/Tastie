@@ -87,7 +87,7 @@ class CardItem extends StatelessWidget {
                         size: 16, color: Colors.grey),
                     const SizedBox(width: 4),
                     Text(
-                      cardData.fav.toString(),
+                      cardData.like.toString(),
                       style: const TextStyle(fontSize: 12),
                     ),
                   ],

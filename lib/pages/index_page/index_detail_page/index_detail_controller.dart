@@ -1,8 +1,9 @@
-import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:get/get.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:tastie/models/card_detail_data.dart';
 import 'package:tastie/models/comment.dart';
-import 'package:tastie/mock/mock_card_detail.dart';
+import 'package:tastie/repositories/mock_card_detail_repository.dart';
 
 class IndexDetailController extends GetxController {
   late CardDetailData cardDetailData;
@@ -33,30 +34,40 @@ class IndexDetailController extends GetxController {
     getCommentList();
   }
 
-  void getIndexDetailData(int id) {
+  void getIndexDetailData(int id) async {
     // 模拟网络请求延迟
-    Future.delayed(const Duration(milliseconds: 500), () {
-      try {
-        // 从 mock 数据中查找对应 id 的数据
-        final found = MockCardDetail.cardDetailDataList.firstWhere(
-          (item) => item.id == id,
-          orElse: () => MockCardDetail.cardDetailDataList.first,
-        );
+    await Future.delayed(const Duration(milliseconds: 500));
+    try {
+      final repository = MockCardDetailRepository();
+      final found = await repository.getById(id);
+      
+      if (found != null) {
         cardDetailData = found;
         isFail = false;
-      } catch (e) {
-        isFail = true;
-      } finally {
-        isLoading = false;
-        update();
+      } else {
+        // Fallback: get first item if ID not found
+        final allData = await repository.getAll();
+        if (allData.isNotEmpty) {
+          cardDetailData = allData.first;
+          isFail = false;
+        } else {
+          isFail = true;
+        }
       }
-    });
+    } catch (e) {
+      isFail = true;
+    } finally {
+      isLoading = false;
+      update();
+    }
   }
 
   void getCommentList() {
+    // COMMENT FEATURE DISABLED — RESERVED FOR FUTURE USE
     // 模拟网络请求延迟
     Future.delayed(const Duration(milliseconds: 300), () {
-      commentList = MockCardDetail.commentList;
+      // Comment list is empty as feature is disabled
+      commentList = [];
       // 初始化评论点赞状态
       for (var comment in commentList) {
         commentLikedMap[comment.id] = comment.isLike;
@@ -85,7 +96,59 @@ class IndexDetailController extends GetxController {
 
   // 分享功能
   void share() {
-    // 分享逻辑
-    debugPrint("Share clicked");
+    onShare(cardDetailData);
   }
+}
+
+/// Build formatted shareable text from card detail
+String buildShareText(CardDetailData detail) {
+  final buffer = StringBuffer();
+  
+  // Title
+  buffer.writeln(detail.title);
+  buffer.writeln();
+  
+  // Ingredients
+  buffer.writeln("Ingredients:");
+  for (final ingredient in detail.ingredients) {
+    buffer.writeln("${ingredient.name} - ${ingredient.amount}${ingredient.unit}");
+  }
+  buffer.writeln();
+  
+  // Procedures
+  buffer.writeln("Procedures:");
+  for (int i = 0; i < detail.procedures.length; i++) {
+    // Auto-number each step, remove any existing numbers
+    String step = detail.procedures[i];
+    // Remove leading numbers and dots if present
+    step = step.replaceFirst(RegExp(r'^\d+\.?\s*'), '');
+    buffer.writeln("${i + 1}. $step");
+  }
+  
+  return buffer.toString();
+}
+
+/// Share card detail: opens share sheet and copies to clipboard
+void onShare(CardDetailData detail) {
+  final shareText = buildShareText(detail);
+  
+  // Open native share sheet
+  Share.share(shareText);
+  
+  // Copy to clipboard
+  Clipboard.setData(ClipboardData(text: shareText));
+}
+
+/// Format count for display
+/// 0-9999: full number
+/// >=10000: "X.Xw" format (one decimal, no trailing zeros)
+String formatCount(int count) {
+  if (count < 10000) {
+    return count.toString();
+  }
+  
+  final double thousands = count / 1000.0;
+  // Round to 1 decimal place and remove trailing zeros
+  final String formatted = thousands.toStringAsFixed(1);
+  return formatted.replaceAll(RegExp(r'\.?0+$'), '') + 'w';
 }

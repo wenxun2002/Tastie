@@ -55,19 +55,27 @@ class _IndexDetailPageState extends State<IndexDetailPage>
                 ClipOval(
                   child: ImageUtils.loadImage(
                     controller.cardDetailData.avatar,
-                    width: 40,
-                    height: 40,
+                    width: 38,
+                    height: 38,
                     fit: BoxFit.cover,
                   ),
                 ),
                 Expanded(
                   child: Padding(
                     padding: const EdgeInsets.only(left: 8.0),
-                    child: Text(
-                      controller.cardDetailData.nickname,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      softWrap: false,
+                    child: GestureDetector(
+                      onTap: () {
+                        print("Open author profile placeholder");
+                      },
+                      child: Text(
+                        controller.cardDetailData.nickname,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        softWrap: false,
+                        style: ColorPlate.bodyText.copyWith(
+                          fontSize: 14,
+                        ),
+                      ),
                     ),
                   ),
                 ),
@@ -93,6 +101,7 @@ class _IndexDetailPageState extends State<IndexDetailPage>
                 padding: const EdgeInsets.only(left: 12.0, right: 14),
                 child: IconButton(
                   icon: const Icon(Icons.share, size: 20),
+                  color: ColorPlate.primary,
                   onPressed: () {
                     controller.share();
                   },
@@ -328,6 +337,7 @@ class _IndexDetailPageState extends State<IndexDetailPage>
     );
   }
 
+  // COMMENT FEATURE DISABLED — RESERVED FOR FUTURE USE
   // Hidden comment section (kept for future use)
   Widget buildComment(IndexDetailController controller) {
     return Visibility(
@@ -455,13 +465,15 @@ class _IndexDetailPageState extends State<IndexDetailPage>
           children: [
             Icon(
               controller.isLiked ? Icons.favorite : Icons.favorite_border,
-              size: 30,
-              color: controller.isLiked ? Colors.red : Colors.grey,
+              size: 28,
+              color: controller.isLiked ? Colors.red : ColorPlate.textSecondary,
             ),
-            const SizedBox(width: 4),
+            const SizedBox(width: 6),
             Text(
-              count.toString(),
-              style: ColorPlate.bodyTextSmall,
+              formatCount(count),
+              style: ColorPlate.bodyTextSmall.copyWith(
+                fontWeight: FontWeight.w500,
+              ),
             ),
           ],
         ),
@@ -478,81 +490,86 @@ class _IndexDetailPageState extends State<IndexDetailPage>
           children: [
             Icon(
               controller.isFavorited ? Icons.star : Icons.star_border,
-              size: 30,
-              color: controller.isFavorited ? Colors.orange : Colors.grey,
+              size: 28,
+              color: controller.isFavorited
+                  ? Colors.orange
+                  : ColorPlate.textSecondary,
             ),
-            const SizedBox(width: 4),
+            const SizedBox(width: 6),
             Text(
-              count.toString(),
-              style: ColorPlate.bodyTextSmall,
+              formatCount(count),
+              style: ColorPlate.bodyTextSmall.copyWith(
+                fontWeight: FontWeight.w500,
+              ),
             ),
           ],
         ),
       );
     }
 
+    // COMMENT FEATURE DISABLED — RESERVED FOR FUTURE USE
+    // Comment icon and input box are hidden but code preserved for future use
     Widget buildCommentIcon(int count) {
-      return GestureDetector(
-        onTap: () {
-          debugPrint("Comment clicked");
-        },
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(
-              Icons.comment,
-              size: 30,
-              color: Colors.grey,
-            ),
-            const SizedBox(width: 4),
-            Text(
-              count.toString(),
-              style: ColorPlate.bodyTextSmall,
-            ),
-          ],
+      return Visibility(
+        visible: false,
+        child: GestureDetector(
+          onTap: () {
+            debugPrint("Comment clicked");
+          },
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(
+                Icons.comment,
+                size: 30,
+                color: Colors.grey,
+              ),
+              const SizedBox(width: 4),
+              Text(
+                formatCount(count),
+                style: ColorPlate.bodyTextSmall,
+              ),
+            ],
+          ),
         ),
       );
     }
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
+    return Container(
+      decoration: BoxDecoration(
+        color: ColorPlate.backgroundWhite,
+        border: Border(
+          top: BorderSide(
+            color: ColorPlate.borderGrey.withOpacity(0.3),
+            width: 1,
+          ),
+        ),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
       child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Expanded(
-            child: Container(
-              margin: const EdgeInsets.only(right: 8.0),
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: const ShapeDecoration(
-                shape: StadiumBorder(),
-                color: ColorPlate.background,
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.only(right: 8.0),
-                    child: Icon(
-                      Icons.edit,
-                      size: 20,
-                      color: ColorPlate.textTertiary,
-                    ),
-                  ),
-                  Expanded(
-                    child: Text(
-                      "Say something...",
-                      style: ColorPlate.caption,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ],
-              ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            decoration: BoxDecoration(
+              color: ColorPlate.secondary.withOpacity(0.3),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                buildLikeIcon(controller.cardDetailData.like),
+                const SizedBox(width: 20),
+                Container(
+                  width: 1,
+                  height: 24,
+                  color: ColorPlate.borderGrey.withOpacity(0.5),
+                ),
+                const SizedBox(width: 20),
+                buildFavoriteIcon(controller.cardDetailData.fav),
+              ],
             ),
           ),
-          buildLikeIcon(controller.cardDetailData.like),
-          const SizedBox(width: 4),
-          buildFavoriteIcon(controller.cardDetailData.fav),
-          const SizedBox(width: 4),
-          buildCommentIcon(controller.cardDetailData.comment),
         ],
       ),
     );
@@ -601,63 +618,40 @@ class _NutritionSectionState extends State<_NutritionSection> {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Header with toggle button
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              "Nutrition info",
-              style: ColorPlate.heading2.copyWith(
-                fontWeight: FontWeight.w600,
-                color: ColorPlate.textPrimary,
-              ),
-            ),
-            TextButton.icon(
-              onPressed: () {
-                setState(() {
-                  _isExpanded = !_isExpanded;
-                });
-              },
-              icon: Icon(
-                _isExpanded ? Icons.remove : Icons.add,
-                size: 20,
-                color: ColorPlate.primary,
-              ),
-              label: Text(
-                _isExpanded ? "View Less" : "View More",
-                style: ColorPlate.bodyTextSmall.copyWith(
-                  color: ColorPlate.primary,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-          ],
+    return ExpansionTile(
+      title: Text(
+        "Nutrition info",
+        style: ColorPlate.heading2.copyWith(
+          fontWeight: FontWeight.w600,
+          color: ColorPlate.textPrimary,
         ),
-        // Expandable nutrition table
-        AnimatedCrossFade(
-          firstChild: const SizedBox.shrink(),
-          secondChild: Column(
-            children: [
-              _buildNutritionRow(
-                  "Calories", widget.nutrition.calories.toString()),
-              _buildNutritionRow("Fat", "${widget.nutrition.fat.toInt()} g"),
-              _buildNutritionRow(
-                  "Carbohydrates", "${widget.nutrition.carbs.toInt()} g"),
-              _buildNutritionRow(
-                  "Fiber", "${widget.nutrition.fiber.toInt()} g"),
-              _buildNutritionRow(
-                  "Sugar", "${widget.nutrition.sugar.toInt()} g"),
-              _buildNutritionRow(
-                  "Protein", "${widget.nutrition.protein.toInt()} g"),
-            ],
-          ),
-          crossFadeState: _isExpanded
-              ? CrossFadeState.showSecond
-              : CrossFadeState.showFirst,
-          duration: const Duration(milliseconds: 300),
+      ),
+      // Remove the border when expanded
+      shape: LinearBorder.none,
+      // Remove the border when collapsed
+      collapsedShape: LinearBorder.none,
+      trailing: Icon(
+        _isExpanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
+        color: ColorPlate.primary,
+      ),
+      onExpansionChanged: (bool expanded) {
+        setState(() {
+          _isExpanded = expanded;
+        });
+      },
+      children: [
+        Column(
+          children: [
+            _buildNutritionRow(
+                "Calories", widget.nutrition.calories.toString()),
+            _buildNutritionRow("Fat", "${widget.nutrition.fat.toInt()} g"),
+            _buildNutritionRow(
+                "Carbohydrates", "${widget.nutrition.carbs.toInt()} g"),
+            _buildNutritionRow("Fiber", "${widget.nutrition.fiber.toInt()} g"),
+            _buildNutritionRow("Sugar", "${widget.nutrition.sugar.toInt()} g"),
+            _buildNutritionRow(
+                "Protein", "${widget.nutrition.protein.toInt()} g"),
+          ],
         ),
       ],
     );

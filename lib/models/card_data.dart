@@ -28,5 +28,35 @@ class CardData {
   static List<String> parseTagsFromContent(String content) {
     return content.split(',').map((tag) => tag.trim()).toList();
   }
+
+  factory CardData.fromJson(Map<String, dynamic> json) {
+    return CardData(
+      id: json['id'] as int,
+      uid: json['uid'] as int,
+      cover: json['cover'] as String,
+      content: json['content'] as String,
+      avatar: json['avatar'] as String,
+      nickname: json['nickname'] as String,
+      fav: json['fav'] as int,
+      like: json['like'] as int,
+      comment: json['comment'] as int? ?? 0, // Optional: defaults to 0 if not present
+      tags: (json['tags'] as List<dynamic>).map((e) => e as String).toList(),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'uid': uid,
+      'cover': cover,
+      'content': content,
+      'avatar': avatar,
+      'nickname': nickname,
+      'fav': fav,
+      'like': like,
+      'comment': comment,
+      'tags': tags,
+    };
+  }
 }
 

@@ -42,6 +42,10 @@ class MockCardDetail {
     );
   }
 
+  // MIGRATED TO JSON — This data has been moved to assets/mock/card_detail_list.json
+  // Use MockCardDetailRepository to load data from JSON instead
+  // This is kept for reference only
+  /*
   static List<CardDetailData> cardDetailDataList = [
     CardDetailData(
       id: 1,
@@ -353,7 +357,15 @@ class MockCardDetail {
       nutrition: _generateNutrition(),
     ),
   ];
+  */
 
+  // Empty list as fallback - data now loaded from JSON via MockCardDetailRepository
+  static List<CardDetailData> cardDetailDataList = [];
+
+  // COMMENT FEATURE DISABLED — RESERVED FOR FUTURE USE
+  // Comment data is commented out but structure preserved for future re-enabling
+  // Uncomment to re-enable comment feature
+  /*
   static List<Comment> commentList = [
     Comment(
       id: 1,
@@ -377,4 +389,8 @@ class MockCardDetail {
       address: "Malaysia",
     ),
   ];
+  */
+
+  // Empty list as fallback for disabled comment feature
+  static List<Comment> commentList = [];
 }

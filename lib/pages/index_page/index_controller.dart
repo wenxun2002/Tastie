@@ -3,8 +3,8 @@ import 'package:get/get.dart';
 import 'package:tastie/constants/pages.dart';
 import 'package:tastie/models/card_data.dart';
 import 'package:tastie/models/weather_data.dart';
-import 'package:tastie/mock/mock.dart';
 import 'package:tastie/mock/mock_weather.dart';
+import 'package:tastie/repositories/mock_index_repository.dart';
 import 'package:tastie/utils/post_sorter.dart';
 
 class IndexController extends GetxController
@@ -29,10 +29,17 @@ class IndexController extends GetxController
     super.onClose();
   }
 
-  void loadData() {
-    // Load mock data
-    _allData = List.from(Mock.indexData);
-    _sortData();
+  void loadData() async {
+    // Load mock data from JSON
+    try {
+      final repository = MockIndexRepository();
+      _allData = await repository.getAll();
+      _sortData();
+    } catch (e) {
+      // Fallback: empty list if loading fails
+      _allData = [];
+      _sortData();
+    }
   }
 
   void loadWeatherData() {
@@ -55,8 +62,15 @@ class IndexController extends GetxController
     // 2. Reload initial posts (mock or API)
     await Future.delayed(
         const Duration(milliseconds: 500)); // Simulate network delay
-    _allData = List.from(Mock.indexData);
-    _sortData();
+    try {
+      final repository = MockIndexRepository();
+      _allData = await repository.getAll();
+      _sortData();
+    } catch (e) {
+      // Fallback: empty list if loading fails
+      _allData = [];
+      _sortData();
+    }
   }
 
   /// Infinite scroll: Load more posts when reaching bottom
@@ -71,9 +85,14 @@ class IndexController extends GetxController
 
     // For mock data, we'll duplicate existing data to simulate loading more
     // In real app, you would fetch from API
-    final morePosts = List<CardData>.from(Mock.indexData);
-    _allData.addAll(morePosts);
-    _sortData();
+    try {
+      final repository = MockIndexRepository();
+      final morePosts = await repository.getAll();
+      _allData.addAll(morePosts);
+      _sortData();
+    } catch (e) {
+      // If loading fails, just continue with existing data
+    }
 
     isLoadingMore = false;
     update(['post_list']);

@@ -61,7 +61,7 @@ List<CardData> sortPostsByWeather({
 /// Sums the weights of all tags in the post that match the weather category.
 /// Optionally normalizes by the number of tags.
 double _computeWeatherScore(CardData post, WeatherCategory category) {
-  final weights = kWeatherTagWeight[category] ?? {};
+  final weights = weatherWeights[category] ?? {};
   double sum = 0.0;
 
   for (final tag in post.tags) {

@@ -8,6 +8,22 @@ class Ingredient {
     required this.amount,
     required this.unit,
   });
+
+  factory Ingredient.fromJson(Map<String, dynamic> json) {
+    return Ingredient(
+      name: json['name'] as String,
+      amount: (json['amount'] as num).toDouble(),
+      unit: json['unit'] as String,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'name': name,
+      'amount': amount,
+      'unit': unit,
+    };
+  }
 }
 
 class Nutrition {
@@ -26,6 +42,52 @@ class Nutrition {
     required this.sugar,
     required this.protein,
   });
+
+  factory Nutrition.fromJson(Map<String, dynamic> json) {
+    return Nutrition(
+      calories: json['calories'] as int,
+      fat: (json['fat'] as num).toDouble(),
+      carbs: (json['carbs'] as num).toDouble(),
+      fiber: (json['fiber'] as num).toDouble(),
+      sugar: (json['sugar'] as num).toDouble(),
+      protein: (json['protein'] as num).toDouble(),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'calories': calories,
+      'fat': fat,
+      'carbs': carbs,
+      'fiber': fiber,
+      'sugar': sugar,
+      'protein': protein,
+    };
+  }
+}
+
+class Author {
+  final String nickname;
+  final String avatar;
+
+  Author({
+    required this.nickname,
+    required this.avatar,
+  });
+
+  factory Author.fromJson(Map<String, dynamic> json) {
+    return Author(
+      nickname: json['nickname'] as String,
+      avatar: json['avatar'] as String,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'nickname': nickname,
+      'avatar': avatar,
+    };
+  }
 }
 
 class CardDetailData {
@@ -33,8 +95,7 @@ class CardDetailData {
   final int uid;
   final String title;
   final String content;
-  final String avatar;
-  final String nickname;
+  final Author author;
   final int fav;
   final int like;
   final int comment;
@@ -51,8 +112,7 @@ class CardDetailData {
     required this.uid,
     required this.title,
     required this.content,
-    required this.avatar,
-    required this.nickname,
+    required this.author,
     required this.fav,
     required this.like,
     required this.comment,
@@ -64,4 +124,56 @@ class CardDetailData {
     required this.procedures,
     this.nutrition,
   });
+
+  // Backward compatibility getters for existing UI code
+  String get avatar => author.avatar;
+  String get nickname => author.nickname;
+
+  factory CardDetailData.fromJson(Map<String, dynamic> json) {
+    return CardDetailData(
+      id: json['id'] as int,
+      uid: json['uid'] as int,
+      title: json['title'] as String,
+      content: json['content'] as String,
+      author: Author.fromJson(json['author'] as Map<String, dynamic>),
+      fav: json['fav'] as int,
+      like: json['like'] as int,
+      comment: json['commentCount'] as int? ??
+          0, // Optional: defaults to 0 if not present
+      date: json['date'] as String,
+      address: json['address'] as String,
+      images:
+          (json['images'] as List<dynamic>).map((e) => e as String).toList(),
+      tags: (json['tags'] as List<dynamic>).map((e) => e as String).toList(),
+      ingredients: (json['ingredients'] as List<dynamic>)
+          .map((e) => Ingredient.fromJson(e as Map<String, dynamic>))
+          .toList(),
+      procedures: (json['procedures'] as List<dynamic>)
+          .map((e) => e as String)
+          .toList(),
+      nutrition: json['nutrition'] != null
+          ? Nutrition.fromJson(json['nutrition'] as Map<String, dynamic>)
+          : null,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'uid': uid,
+      'title': title,
+      'content': content,
+      'author': author.toJson(),
+      'fav': fav,
+      'like': like,
+      'commentCount': comment,
+      'date': date,
+      'address': address,
+      'images': images,
+      'tags': tags,
+      'ingredients': ingredients.map((e) => e.toJson()).toList(),
+      'procedures': procedures,
+      'nutrition': nutrition?.toJson(),
+    };
+  }
 }

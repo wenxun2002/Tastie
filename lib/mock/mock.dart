@@ -1,6 +1,10 @@
 import 'package:tastie/models/card_data.dart';
 
 class Mock {
+  // MIGRATED TO JSON — This data has been moved to assets/mock/index_list.json
+  // Use MockIndexRepository to load data from JSON instead
+  // This is kept for reference only
+  /*
   static List<CardData> indexData = [
     CardData(
       id: 1,
@@ -171,4 +175,8 @@ class Mock {
       tags: CardData.parseTagsFromContent("Warming"),
     ),
   ];
+  */
+
+  // Empty list as fallback - data now loaded from JSON via MockIndexRepository
+  static List<CardData> indexData = [];
 }
