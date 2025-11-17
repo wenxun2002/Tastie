@@ -2,11 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'home_controller.dart';
 import 'package:tastie/constants/color_plate.dart';
+import 'package:tastie/pages/create_post_page.dart';
 import 'package:tastie/pages/index_page/index_page.dart';
 
 class HomePage extends StatelessWidget {
   HomePage({super.key});
-  final HomeController homeController = Get.put(HomeController());  
+  final HomeController homeController = Get.put(HomeController());
 
   @override
   Widget build(BuildContext context) {
@@ -37,33 +38,35 @@ class HomePage extends StatelessWidget {
             currentIndex: homeController.currentIndex.value,
             unselectedFontSize: 16,
             selectedFontSize: 18,
-            items: const [
-              BottomNavigationBarItem(
+            items: [
+              const BottomNavigationBarItem(
                 icon: Icon(Icons.home),
                 label: "Home",
               ),
-              BottomNavigationBarItem(
+              const BottomNavigationBarItem(
                 icon: Icon(Icons.video_library),
                 label: "Video",
               ),
               BottomNavigationBarItem(
-                icon: Icon(
-                  Icons.add_box,
-                  size: 32, 
-                  color: ColorPlate.primary
+                icon: _CreateNavButton(
+                  isActive: homeController.currentIndex.value == 2,
                 ),
                 label: "",
               ),
-              BottomNavigationBarItem(
+              const BottomNavigationBarItem(
                 icon: Icon(Icons.message),
                 label: "Msg",
               ),
-              BottomNavigationBarItem(
+              const BottomNavigationBarItem(
                 icon: Icon(Icons.person),
                 label: "Me",
               ),
             ],
             onTap: (index) {
+              if (index == 2) {
+                Get.to(() => const CreatePostPage());
+                return;
+              }
               homeController.onChangePage(index);
             },
           ),
@@ -77,12 +80,40 @@ class HomePage extends StatelessWidget {
       child: Text(
         "$title Page\n(Coming Soon)",
         textAlign: TextAlign.center,
-        style: const TextStyle(
-          fontSize: 18,
-          color: Colors.grey,
-        ),
+        style: const TextStyle(fontSize: 18, color: Colors.grey),
       ),
     );
   }
 }
 
+class _CreateNavButton extends StatelessWidget {
+  final bool isActive;
+
+  const _CreateNavButton({required this.isActive});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 48,
+      height: 48,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: const LinearGradient(
+          colors: [ColorPlate.primary, Color(0xffF15454)],
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+        ),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x40E23E3E),
+            blurRadius: 14,
+            offset: Offset(0, 8),
+          ),
+        ],
+        // border: Border.all(color: Colors.white, width: isActive ? 3 : 2),
+      ),
+      alignment: Alignment.center,
+      child: const Icon(Icons.add, color: Colors.white, size: 26),
+    );
+  }
+}

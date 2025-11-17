@@ -95,8 +95,8 @@ class IndexDetailController extends GetxController {
   }
 
   // 分享功能
-  void share() {
-    onShare(cardDetailData);
+  Future<void> share() {
+    return onShare(cardDetailData);
   }
 }
 
@@ -129,11 +129,11 @@ String buildShareText(CardDetailData detail) {
 }
 
 /// Share card detail: opens share sheet and copies to clipboard
-void onShare(CardDetailData detail) {
+Future<void> onShare(CardDetailData detail) async {
   final shareText = buildShareText(detail);
   
   // Open native share sheet
-  Share.share(shareText);
+  await SharePlus.instance.share(ShareParams(text: shareText));
   
   // Copy to clipboard
   Clipboard.setData(ClipboardData(text: shareText));
