@@ -38,8 +38,11 @@ class _PhotoUploadRowState extends State<PhotoUploadRow> {
   @override
   Widget build(BuildContext context) {
     final List<Widget> children = [
-      for (final photo in _photos) ...[
-        PhotoUploadButton(image: photo),
+      for (final entry in _photos.asMap().entries) ...[
+        GestureDetector(
+          onTap: () => _showPhotoOptions(entry.key),
+          child: PhotoUploadButton(image: entry.value),
+        ),
         const SizedBox(width: 12),
       ],
       if (_photos.length < widget.maxPhotos)
@@ -52,6 +55,55 @@ class _PhotoUploadRowState extends State<PhotoUploadRow> {
       scrollDirection: Axis.horizontal,
       child: Row(children: children),
     );
+  }
+
+  Future<void> _showPhotoOptions(int index) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      builder: (context) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.swap_horiz),
+                title: const Text('Replace Photo'),
+                onTap: () {
+                  Navigator.pop(context);
+                  _replacePhoto(index);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.delete_outline),
+                title: const Text('Remove Photo'),
+                onTap: () {
+                  Navigator.pop(context);
+                  _removePhoto(index);
+                },
+              ),
+              const SizedBox(height: 4),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _replacePhoto(int index) async {
+    final XFile? image = await _picker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 85,
+    );
+
+    if (image != null && mounted) {
+      setState(() => _photos[index] = image);
+      widget.onChanged?.call(List.unmodifiable(_photos));
+    }
+  }
+
+  void _removePhoto(int index) {
+    setState(() => _photos.removeAt(index));
+    widget.onChanged?.call(List.unmodifiable(_photos));
   }
 }
 
