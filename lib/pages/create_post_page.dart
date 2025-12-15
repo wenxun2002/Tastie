@@ -4,9 +4,11 @@ import 'package:get/get.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:step_progress/step_progress.dart';
 import 'package:tastie/constants/color_plate.dart';
+import 'package:tastie/constants/ingredient_units.dart';
 import 'package:tastie/models/create_post_data.dart';
 import 'package:tastie/models/tag_item.dart';
 import 'package:tastie/repositories/mock_tag_repository.dart';
+import 'package:tastie/services/create_post_service.dart';
 import 'package:tastie/widgets/photo_upload_row.dart';
 import 'package:tastie/widgets/primary_button.dart';
 import 'package:tastie/widgets/smart_generate_button.dart';
@@ -23,14 +25,9 @@ class CreatePostPage extends StatefulWidget {
 
 class _CreatePostPageState extends State<CreatePostPage> {
   static const int _maxPhotos = 6;
-  static const List<String> _unitOptions = [
-    'g',
-    'kg',
-    'ml',
-    'l',
-    's',
-    'few drop',
-  ];
+  // Reuse the unit definitions from a single source of truth.
+  static const List<String> _specialUnits = IngredientUnits.specialUnits;
+  static const List<String> _unitOptions = IngredientUnits.allUnits;
 
   final TextEditingController _titleController = TextEditingController();
   final TextEditingController _contentController = TextEditingController();
@@ -161,7 +158,8 @@ class _CreatePostPageState extends State<CreatePostPage> {
 
   void _submit() {
     final data = _buildCreatePostData();
-    debugPrint('Submitting CreatePostData: ${data.toString()}');
+    // Simulate sending to backend by logging the complete payload.
+    CreatePostService.logCreatePostPayload(data);
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(const SnackBar(content: Text('Submit coming soon')));
@@ -442,7 +440,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
             buildDefaultDragHandles: false,
             itemBuilder: (context, index) {
               final entry = _ingredientEntries[index];
-              final bool hideAmount = entry.data.unit == 'few drop';
+              final bool hideAmount = _specialUnits.contains(entry.data.unit);
               return Dismissible(
                 key: ValueKey(entry.id),
                 direction: DismissDirection.endToStart,
@@ -466,8 +464,12 @@ class _CreatePostPageState extends State<CreatePostPage> {
                         amount: double.tryParse(value) ?? 0,
                       ),
                       onUnitChanged: (value) {
+                        final bool isSpecial = _specialUnits.contains(value);
                         _updateIngredient(entry.id, unit: value);
-                        if (value == 'few drop') {
+                        // When switching to a special unit, we don't need amount;
+                        // store 0 internally and hide the input. The payload that
+                        // is printed on submit will convert this to `null`.
+                        if (isSpecial) {
                           _updateIngredient(entry.id, amount: 0);
                         }
                       },
