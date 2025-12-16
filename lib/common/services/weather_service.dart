@@ -1,70 +1,30 @@
 import 'package:tastie/models/weather_data.dart';
+import 'package:tastie/data/weather_tag_weight.dart';
+import 'package:tastie/utils/weather_classifier.dart';
 
-/// 天气服务类 - 用于判断天气类型和生成相应的建议消息
+/// 天气服务类 - 负责基于统一的 WeatherCategory 生成文案。
+///
+/// 说明：
+/// - **唯一的分类标准** 来自 `classifyWeather`（参见 `weather_classifier.dart`）
+/// - 本类只做「WeatherCategory → 文案」的映射，避免出现两套不同的判断规则。
 class WeatherService {
-  /// 判断是否为炎热潮湿天气
-  /// temp >= 32, humidity >= 80, feelsLike >= 40
-  static bool isHotHumid(WeatherData weather) {
-    return weather.temperature >= 32 &&
-        weather.humidity >= 80 &&
-        weather.feelsLike >= 40;
-  }
-
-  /// 判断是否为炎热干燥天气
-  /// temp >= 33, humidity < 40, uvIndex >= 9
-  static bool isHotDry(WeatherData weather) {
-    return weather.temperature >= 33 &&
-        weather.humidity < 40 &&
-        weather.uvIndex >= 9;
-  }
-
-  /// 判断是否为雨天
-  /// condition == "Rain", precipitation > 10, humidity >= 85
-  static bool isRainy(WeatherData weather) {
-    return weather.condition == "Rain" &&
-        weather.precipitation > 10 &&
-        weather.humidity >= 85;
-  }
-
-  /// 判断是否为寒冷天气
-  /// temp < 20, condition == "Clouds"
-  static bool isCold(WeatherData weather) {
-    return weather.temperature < 20 && weather.condition == "Clouds";
-  }
-
-  /// 判断是否为暴风雨天气
-  /// condition == "Thunderstorm", precipitation > 30, humidity >= 90
-  static bool isStormy(WeatherData weather) {
-    return weather.condition == "Thunderstorm" &&
-        weather.precipitation > 30 &&
-        weather.humidity >= 90;
-  }
-
-  /// 判断是否为正常天气
-  /// temp 27-29, humidity 50-65
-  static bool isNeutral(WeatherData weather) {
-    return weather.temperature >= 27 &&
-        weather.temperature <= 29 &&
-        weather.humidity >= 50 &&
-        weather.humidity <= 65;
-  }
-
   /// 根据天气数据自动判断天气类型并返回对应的消息
   static String getWeatherMessage(WeatherData weather) {
-    if (isHotHumid(weather)) {
-      return getHotHumidMessage();
-    } else if (isHotDry(weather)) {
-      return getHotDryMessage();
-    } else if (isRainy(weather)) {
-      return getRainyMessage();
-    } else if (isCold(weather)) {
-      return getColdMessage();
-    } else if (isStormy(weather)) {
-      return getStormyMessage();
-    } else if (isNeutral(weather)) {
-      return getNeutralMessage();
-    } else {
-      return getDefaultMessage();
+    final category = classifyWeather(weather);
+
+    switch (category) {
+      case WeatherCategory.hotHumid:
+        return getHotHumidMessage();
+      case WeatherCategory.hotDry:
+        return getHotDryMessage();
+      case WeatherCategory.rainy:
+        return getRainyMessage();
+      case WeatherCategory.cold:
+        return getColdMessage();
+      case WeatherCategory.stormy:
+        return getStormyMessage();
+      case WeatherCategory.neutral:
+        return getNeutralMessage();
     }
   }
 

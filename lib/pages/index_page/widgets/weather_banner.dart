@@ -6,10 +6,12 @@ import 'package:tastie/models/weather_data.dart';
 
 class WeatherBanner extends StatefulWidget {
   final WeatherData weatherData;
+  final String? locationName;
 
   const WeatherBanner({
     super.key,
     required this.weatherData,
+    this.locationName,
   });
 
   @override
@@ -60,17 +62,17 @@ class _WeatherBannerState extends State<WeatherBanner> {
     final maxScroll = _scrollController.position.maxScrollExtent;
     if (maxScroll <= 0) return;
 
-    // Reset to right (maxScrollExtent) - text starts from right side
-    _scrollController.jumpTo(maxScroll);
+    // Reset to left (0) - text starts从左侧开始
+    _scrollController.jumpTo(0);
 
-    // Wait a moment for text to appear from right, then scroll smoothly to left
+    // Wait a moment, then scroll smoothly to right
     Future.delayed(const Duration(milliseconds: 800), () {
       if (!mounted || !_scrollController.hasClients) return;
 
-      // Scroll smoothly from right to left
+      // Scroll smoothly from left to right
       _scrollController
           .animateTo(
-        0,
+        maxScroll,
         duration: Duration(
             milliseconds: maxScroll.toInt() * 30), // Smooth scrolling speed
         curve: Curves.easeInOut, // Smooth curve for better visual effect
@@ -92,9 +94,21 @@ class _WeatherBannerState extends State<WeatherBanner> {
     return WeatherService.getWeatherMessage(weather);
   }
 
+  String _formatCoreStats(WeatherData w) {
+    final temp = w.temperature.toStringAsFixed(1);
+    final feels = w.feelsLike.toStringAsFixed(1);
+    final hum = w.humidity.toStringAsFixed(0);
+    return '$temp°C | feels like $feels°C | $hum% humidity | ${w.condition}';
+  }
+
   @override
   Widget build(BuildContext context) {
     final message = _generateWeatherMessage(widget.weatherData);
+    final coreStats = _formatCoreStats(widget.weatherData);
+    final locationPrefix =
+        (widget.locationName != null && widget.locationName!.isNotEmpty)
+            ? '[${widget.locationName}] '
+            : '';
 
     return Container(
       height: 40,
@@ -110,7 +124,7 @@ class _WeatherBannerState extends State<WeatherBanner> {
             padding:
                 const EdgeInsets.symmetric(horizontal: 14.0, vertical: 10.0),
             child: Text(
-              message,
+              '$locationPrefix$coreStats  •  $message',
               style: ColorPlate.bodyText.copyWith(
                 color: ColorPlate.primary,
                 fontSize: 14,

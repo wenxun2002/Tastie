@@ -26,11 +26,7 @@ class IndexPage extends StatelessWidget {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Image.asset(
-                    "assets/images/LogoT.png",
-                    width: 30,
-                    height: 30,
-                  ),
+                  Image.asset("assets/images/LogoT.png", width: 30, height: 30),
                   SizedBox(
                     height: 30,
                     width: 200,
@@ -46,11 +42,7 @@ class IndexPage extends StatelessWidget {
                       ],
                     ),
                   ),
-                  const Icon(
-                    Icons.search,
-                    size: 30,
-                    color: Colors.black,
-                  ),
+                  const Icon(Icons.search, size: 30, color: Colors.black),
                 ],
               ),
             ),
@@ -72,9 +64,7 @@ class IndexPage extends StatelessWidget {
   }
 
   Widget _buildFollowPage(IndexController controller) {
-    return const Center(
-      child: Text("Follow Page\n(Coming Soon)"),
-    );
+    return const Center(child: Text("Follow Page\n(Coming Soon)"));
   }
 
   Widget _buildExplorePage(IndexController controller) {
@@ -82,9 +72,7 @@ class IndexPage extends StatelessWidget {
   }
 
   Widget _buildShopPage(IndexController controller) {
-    return const Center(
-      child: Text("Shop Page\n(Coming Soon)"),
-    );
+    return const Center(child: Text("Shop Page\n(Coming Soon)"));
   }
 }
 
@@ -92,9 +80,7 @@ class IndexPage extends StatelessWidget {
 class _ExplorePageStateful extends StatefulWidget {
   final IndexController controller;
 
-  const _ExplorePageStateful({
-    required this.controller,
-  });
+  const _ExplorePageStateful({required this.controller});
 
   @override
   State<_ExplorePageStateful> createState() => _ExplorePageState();
@@ -137,7 +123,9 @@ class _ExplorePageState extends State<_ExplorePageStateful> {
                 child: Column(
                   children: [
                     WeatherBanner(
-                        weatherData: widget.controller.currentWeather),
+                      weatherData: widget.controller.currentWeather,
+                      locationName: widget.controller.currentLocationName,
+                    ),
                     const SizedBox(height: 12),
                     WeatherSelector(controller: widget.controller),
                   ],

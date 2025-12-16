@@ -28,7 +28,8 @@ class WeatherSelector extends StatelessWidget {
       color: Colors.white,
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       child: DropdownButton<WeatherData>(
-        value: controller.currentWeather,
+        // 只允许下拉框的 value 使用几个固定的 MockWeather，避免值不在 items 中
+        value: controller.selectorWeather,
         isExpanded: true,
         underline: Container(), // Remove default underline
         items: weatherOptions.map((option) {

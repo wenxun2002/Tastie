@@ -10,6 +10,7 @@ class MockWeather {
     condition: "Clear",
     uvIndex: 9.5,
     precipitation: 0.0,
+    conditionCode: 1000, // Sunny/Clear
   );
 
   // Hot but dry
@@ -21,6 +22,7 @@ class MockWeather {
     condition: "Clear",
     uvIndex: 11.0,
     precipitation: 0.0,
+    conditionCode: 1000,
   );
 
   // Rainy
@@ -32,6 +34,7 @@ class MockWeather {
     condition: "Rain",
     uvIndex: 2.0,
     precipitation: 15.5,
+    conditionCode: 1183, // Light rain
   );
 
   // Cold
@@ -43,6 +46,7 @@ class MockWeather {
     condition: "Clouds",
     uvIndex: 3.0,
     precipitation: 0.0,
+    conditionCode: 1006, // Cloudy
   );
 
   // Normal weather
@@ -54,6 +58,7 @@ class MockWeather {
     condition: "Clear",
     uvIndex: 6.0,
     precipitation: 0.0,
+    conditionCode: 1000,
   );
 
   // Heavy thunderstorm
@@ -65,5 +70,6 @@ class MockWeather {
     condition: "Thunderstorm",
     uvIndex: 1.0,
     precipitation: 45.0,
+    conditionCode: 1276, // Moderate or heavy rain with thunder
   );
 }
