@@ -509,31 +509,31 @@ class _IndexDetailPageState extends State<IndexDetailPage>
 
     // COMMENT FEATURE DISABLED — RESERVED FOR FUTURE USE
     // Comment icon and input box are hidden but code preserved for future use
-    Widget buildCommentIcon(int count) {
-      return Visibility(
-        visible: false,
-        child: GestureDetector(
-          onTap: () {
-            debugPrint("Comment clicked");
-          },
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(
-                Icons.comment,
-                size: 30,
-                color: Colors.grey,
-              ),
-              const SizedBox(width: 4),
-              Text(
-                formatCount(count),
-                style: ColorPlate.bodyTextSmall,
-              ),
-            ],
-          ),
-        ),
-      );
-    }
+    // Widget buildCommentIcon(int count) {
+    //   return Visibility(
+    //     visible: false,
+    //     child: GestureDetector(
+    //       onTap: () {
+    //         debugPrint("Comment clicked");
+    //       },
+    //       child: Row(
+    //         mainAxisSize: MainAxisSize.min,
+    //         children: [
+    //           const Icon(
+    //             Icons.comment,
+    //             size: 30,
+    //             color: Colors.grey,
+    //           ),
+    //           const SizedBox(width: 4),
+    //           Text(
+    //             formatCount(count),
+    //             style: ColorPlate.bodyTextSmall,
+    //           ),
+    //         ],
+    //       ),
+    //     ),
+    //   );
+    // }
 
     return Container(
       decoration: BoxDecoration(

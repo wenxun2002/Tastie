@@ -26,7 +26,11 @@ class IndexPage extends StatelessWidget {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Image.asset("assets/images/LogoT.png", width: 30, height: 30),
+                  Image.asset(
+                    "assets/images/LogoTransparent.png",
+                    width: 30,
+                    height: 30,
+                  ),
                   SizedBox(
                     height: 30,
                     width: 200,
