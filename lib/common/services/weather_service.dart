@@ -21,8 +21,8 @@ class WeatherService {
         return getRainyMessage();
       case WeatherCategory.cold:
         return getColdMessage();
-      case WeatherCategory.stormy:
-        return getStormyMessage();
+      case WeatherCategory.winter:
+        return getWinterMessage();
       case WeatherCategory.neutral:
         return getNeutralMessage();
     }
@@ -48,9 +48,9 @@ class WeatherService {
     return "❄️ Cold Weather: Time for warming foods! Enjoy hot soups, warm beverages, spicy dishes, and hearty meals to keep your body warm and energized.";
   }
 
-  /// 获取暴风雨天气消息
-  static String getStormyMessage() {
-    return "⛈️ Stormy Weather: Stay indoors and stay safe! Perfect time for comfort foods like warm soups, hot drinks, and hearty home-cooked meals.";
+  /// 获取冬季 / 下雪天气消息（内部使用 WeatherCategory.stormy 表示 Winter）
+  static String getWinterMessage() {
+    return "⛄ Winter Weather: Cold and snowy conditions are perfect for warm, hearty comfort foods — think hot soups, stews, baked dishes, and hot drinks to keep you warm and satisfied.";
   }
 
   /// 获取正常天气消息

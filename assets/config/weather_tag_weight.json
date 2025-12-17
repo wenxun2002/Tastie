@@ -1,34 +1,34 @@
 {
   "hotHumid": {
-    "Cooling": 1.0,
-    "Hydrating": 0.9,
+    "Cooling": 0.9,
+    "Hydrating": 1.0,
     "Light": 0.7,
-    "Energy": 0.1,
-    "Warming": -0.3,
-    "Comfort": 0.2
+    "Energy": 0.3,
+    "Warming": 0.3,
+    "Comfort": 0.5
   },
   "hotDry": {
     "Cooling": 0.7,
-    "Hydrating": 1.0,
-    "Light": 0.6,
-    "Energy": 0.2,
-    "Warming": 0.0,
-    "Comfort": 0.2
+    "Hydrating": 0.7,
+    "Light": 0.5,
+    "Energy": 0.5,
+    "Warming": 0.5,
+    "Comfort": 0.5
   },
   "rainy": {
-    "Cooling": 0.1,
-    "Hydrating": 0.3,
-    "Light": 0.4,
-    "Energy": 0.6,
-    "Warming": 1.0,
+    "Cooling": 0.5,
+    "Hydrating": 0.5,
+    "Light": 0.5,
+    "Energy": 0.5,
+    "Warming": 0.7,
     "Comfort": 0.9
   },
   "cold": {
-    "Cooling": 0.0,
-    "Hydrating": 0.2,
-    "Light": 0.3,
-    "Energy": 1.0,
-    "Warming": 1.0,
+    "Cooling": 0.3,
+    "Hydrating": 0.3,
+    "Light": 0.5,
+    "Energy": 0.9,
+    "Warming": 0.9,
     "Comfort": 0.7
   },
   "neutral": {
@@ -39,13 +39,13 @@
     "Warming": 0.5,
     "Comfort": 0.5
   },
-  "stormy": {
-    "Cooling": 0.0,
-    "Hydrating": 0.3,
-    "Light": 0.3,
-    "Energy": 0.6,
-    "Warming": 1.0,
-    "Comfort": 1.0
+  "winter": {
+    "Cooling": 0.3,
+    "Hydrating": 0.4,
+    "Light": 0.4,
+    "Energy": 0.7,
+    "Warming": 0.9,
+    "Comfort": 0.9
   }
 }
 

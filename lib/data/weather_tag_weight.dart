@@ -20,8 +20,8 @@ enum WeatherCategory {
   /// Neutral: Normal/comfortable weather (27-29°C, humidity 50-65%)
   neutral,
 
-  /// Stormy: Thunderstorm with very high precipitation (>30mm/h) and humidity (≥90%)
-  stormy,
+  /// Winter: Snowy/freezing conditions (temperature < 0°C)
+  winter,
 }
 
 /// Parse a string key to WeatherCategory enum
@@ -39,8 +39,8 @@ WeatherCategory parseCategory(String key) {
       return WeatherCategory.cold;
     case 'neutral':
       return WeatherCategory.neutral;
-    case 'stormy':
-      return WeatherCategory.stormy;
+    case 'winter':
+      return WeatherCategory.winter;
     default:
       throw ArgumentError('Invalid weather category key: $key');
   }
@@ -114,10 +114,7 @@ class WeatherWeightRepository {
 /// );
 /// // Returns: 1.0
 /// ```
-double getTagWeight({
-  required WeatherCategory weather,
-  required String tag,
-}) {
+double getTagWeight({required WeatherCategory weather, required String tag}) {
   final weights = weatherWeights[weather];
   if (weights == null) return 0.0;
   return weights[tag] ?? 0.0;

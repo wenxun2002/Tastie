@@ -63,11 +63,11 @@ class MockWeather {
 
   // Heavy thunderstorm
   // high precipitation, very high humidity
-  static const WeatherData weatherStormy = WeatherData(
+  static const WeatherData weatherwinter = WeatherData(
     temperature: 22.0,
     humidity: 95.0,
     feelsLike: 25.0,
-    condition: "Thunderstorm",
+    condition: "winter",
     uvIndex: 1.0,
     precipitation: 45.0,
     conditionCode: 1276, // Moderate or heavy rain with thunder

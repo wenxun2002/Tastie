@@ -213,8 +213,8 @@ class IndexController extends GetxController
       case WeatherCategory.neutral:
         selectorWeather = MockWeather.weatherNeutral;
         break;
-      case WeatherCategory.stormy:
-        selectorWeather = MockWeather.weatherStormy;
+      case WeatherCategory.winter:
+        selectorWeather = MockWeather.weatherwinter;
         break;
     }
   }

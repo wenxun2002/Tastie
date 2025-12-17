@@ -21,7 +21,7 @@ class WeatherSelector extends StatelessWidget {
       ('Rainy', MockWeather.weatherRainy),
       ('Cold', MockWeather.weatherCold),
       ('Neutral', MockWeather.weatherNeutral),
-      ('Stormy', MockWeather.weatherStormy),
+      ('Winter', MockWeather.weatherwinter),
     ];
 
     return Container(

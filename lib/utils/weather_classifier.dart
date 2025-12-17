@@ -1,133 +1,71 @@
 import 'package:tastie/data/weather_tag_weight.dart';
 import 'package:tastie/models/weather_data.dart';
 
-/// 根据 WeatherAPI 的 condition code / 文本 + 温度 + 体感温度 + 湿度 + 降水
-/// 将当前天气归类到业务上的 6 个 WeatherCategory。
+/// 新版天气分类逻辑（用于 FYP 报告）
 ///
-/// 设计原则（从高优先级到低优先级）：
+/// 输入信号：
+/// - w.temperature (°C)
+/// - w.feelsLike (°C)
+/// - w.humidity (%)
+/// - w.condition (condition_text)
+/// - w.conditionCode (OpenWeather weather[id])
+/// - w.uvIndex
+/// - w.precipitation (mm/h)
 ///
-/// 1. **极端/强对流天气优先**：
-///    - 雷暴（thunderstorm）→ [WeatherCategory.stormy]
-/// 2. **显著降水**：
-///    - 各类雨（rain / drizzle / shower）→ [WeatherCategory.rainy]
-/// 3. **冰雪/极冷**：
-///    - snow / sleet / blizzard / ice pellets → [WeatherCategory.cold]
-/// 4. **雾霾类**：
-///    - fog / mist / haze，根据温度决定 cold / neutral
-/// 5. **晴/多云场景**：
-///    - 使用温度 + 体感温度(feelsLike) + 湿度 + UV 指数
-///      - 高温高湿高体感 → [WeatherCategory.hotHumid]
-///      - 高温低湿高 UV   → [WeatherCategory.hotDry]
-///      - 低温            → [WeatherCategory.cold]
-///      - 其它满足舒适区间 → [WeatherCategory.neutral]
-/// 6. **兜底**：未匹配到任何条件时，回落到 [WeatherCategory.neutral]。
+/// 优先级（waterfall）：
+/// 1. Snowy / Winter    →  WeatherCategory.stormy  （“冬天”类，主要给有雪国家用）
+/// 2. Rainy / Gloomy    →  WeatherCategory.rainy
+/// 3. Extreme Heat      →  WeatherCategory.hotHumid
+/// 4. Cold / Chilly     →  WeatherCategory.cold
+/// 5. Hot & dry         →  WeatherCategory.hotDry
+/// 6. Mild / Neutral    →  WeatherCategory.neutral
+///
+/// Nutrition Tag 权重全部交给
+/// `assets/config/weather_tag_weight.json` + `data/weather_tag_weight.dart`。
 WeatherCategory classifyWeather(WeatherData w) {
-  final text = w.condition.toLowerCase();
-  final code = w.conditionCode;
+  final String conditionText = w.condition.toLowerCase();
+  final int? code = w.conditionCode;
 
-  bool hasText(String token) => text.contains(token);
-  bool hasAnyText(Iterable<String> tokens) =>
-      tokens.any((t) => text.contains(t));
+  bool hasAny(Iterable<String> tokens) =>
+      tokens.any((t) => conditionText.contains(t));
 
-  bool isThunder(int c) => {1273, 1276, 1279, 1282}.contains(c);
-  bool isRainCode(int c) =>
-      (c >= 1063 && c <= 1201) || (c >= 1240 && c <= 1246);
-  bool isSnowOrSleetCode(int c) =>
-      (c >= 1066 && c <= 1237) || (c >= 1249 && c <= 1264);
-  bool isFogCode(int c) => {1030, 1135, 1147}.contains(c);
+  // OpenWeather code 说明（简化版）:
+  // 2xx: Thunderstorm, 3xx: Drizzle, 5xx: Rain, 6xx: Snow
+  bool isSnowCode(int c) => c >= 600 && c < 700;
+  bool isRainLikeCode(int c) =>
+      (c >= 200 && c < 300) || (c >= 300 && c < 400) || (c >= 500 && c < 600);
 
-  // -------- 1. 雷暴 / 暴风雨（最高优先级） --------
-  final thunderByText = hasText('thunder');
-  final thunderByCode = code != null && isThunder(code);
-  if (thunderByText || thunderByCode) {
-    // 如果有明显雷暴或强降水则归为 stormy
-    if (w.precipitation >= 20 || w.humidity >= 90) {
-      return WeatherCategory.stormy;
-    }
-    // 轻微雷雨则至少按 rainy 处理
+  // Priority 1: Snowy / Winter （全局兼容，映射到 WeatherCategory.stormy = “冬天”权重）
+  final bool snowByText = hasAny(['snow', 'sleet', 'blizzard', 'ice']);
+  final bool snowByCode = code != null && isSnowCode(code);
+  if (snowByText || snowByCode) {
+    return WeatherCategory.winter;
+  }
+
+  // Priority 2: Rainy / Gloomy (psychological focus)
+  final bool rainByText = hasAny(['rain', 'drizzle', 'storm', 'thunder']);
+  final bool rainByCode = code != null && isRainLikeCode(code);
+  if (rainByText || rainByCode || w.precipitation > 0.5) {
     return WeatherCategory.rainy;
   }
 
-  // -------- 2. 各类雨 / 毛毛雨 / 阵雨 --------
-  final rainByText =
-      hasAnyText(['rain', 'drizzle', 'shower']) && !hasText('snow');
-  final rainByCode = code != null && isRainCode(code);
-  if (rainByText || rainByCode) {
-    if (w.precipitation >= 5 || w.humidity >= 80) {
-      return WeatherCategory.rainy;
-    }
-    // 小雨但气候整体偏热湿
-    if (_isHotAndHumid(w)) {
-      return WeatherCategory.hotHumid;
-    }
-    return WeatherCategory.neutral;
-  }
-
-  // -------- 3. 雪 / 雨夹雪 / 冰粒 / 暴风雪 --------
-  final snowByText = hasAnyText([
-    'snow',
-    'sleet',
-    'blizzard',
-    'ice pellets',
-    'blowing snow',
-  ]);
-  final snowByCode = code != null && isSnowOrSleetCode(code);
-  if (snowByText || snowByCode) {
-    return WeatherCategory.cold;
-  }
-
-  // -------- 4. 雾 / 霾 / 薄雾 --------
-  final fogByText = hasAnyText(['fog', 'mist', 'haze']);
-  final fogByCode = code != null && isFogCode(code);
-  if (fogByText || fogByCode) {
-    // 冷雾：体感温度偏低时归为 cold，否则 neutral
-    if (w.feelsLike < 18 || w.temperature < 18) {
-      return WeatherCategory.cold;
-    }
-    return WeatherCategory.neutral;
-  }
-
-  // -------- 5. 无明显降水：用温度 + 体感温度 + 湿度 + UV --------
-  if (_isHotAndHumid(w)) {
+  // Priority 3: Extreme Heat (Hot & humid) - Heat Stress
+  if (w.feelsLike >= 38 ||
+      (w.temperature >= 33 && w.humidity >= 70) ||
+      (w.uvIndex >= 8 && w.temperature >= 30)) {
     return WeatherCategory.hotHumid;
   }
 
-  if (_isHotAndDry(w)) {
-    return WeatherCategory.hotDry;
-  }
-
-  if (_isCold(w)) {
+  // Priority 4: Cold / Chilly（马来西亚语境，空调感）
+  if (w.temperature <= 26 || w.feelsLike <= 27) {
     return WeatherCategory.cold;
   }
 
-  if (_isComfortableNeutral(w)) {
-    return WeatherCategory.neutral;
+  // Priority 5: Hot & dry / Standard tropical heat
+  if (w.feelsLike >= 32 || (w.temperature >= 28 && w.humidity >= 60)) {
+    return WeatherCategory.hotDry;
   }
 
-  // -------- 6. 兜底：中性天气 --------
+  // Default: Mild / Neutral
   return WeatherCategory.neutral;
-}
-
-/// 是否属于“闷热潮湿”：高温 + 高湿 + 体感温度显著偏高
-bool _isHotAndHumid(WeatherData w) {
-  // 与 WeatherService.isHotHumid 保持一致：temp ≥32, humidity ≥80, feelsLike ≥40
-  return w.temperature >= 32 && w.humidity >= 80 && w.feelsLike >= 40;
-}
-
-/// 是否属于“炎热干燥”：高温 + 低湿 + 高 UV（与 WeatherService.isHotDry 对齐）
-bool _isHotAndDry(WeatherData w) {
-  return w.temperature >= 33 && w.humidity < 40 && w.uvIndex >= 9;
-}
-
-/// 是否属于“寒冷”：实际温度或体感温度偏低（略宽松，用 feelsLike 加强体感判断）
-bool _isCold(WeatherData w) {
-  return w.temperature < 20 || w.feelsLike < 18;
-}
-
-/// 是否属于“舒适中性”：温度、体感温度、湿度都在适中区间
-bool _isComfortableNeutral(WeatherData w) {
-  final inTempRange = w.temperature >= 24 && w.temperature <= 30;
-  final inFeelRange = w.feelsLike >= 24 && w.feelsLike <= 32;
-  final inHumidityRange = w.humidity >= 40 && w.humidity <= 70;
-  return inTempRange && inFeelRange && inHumidityRange;
 }
