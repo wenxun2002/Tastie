@@ -1,5 +1,5 @@
 import 'package:tastie/models/weather_data.dart';
-import 'package:tastie/data/weather_tag_weight.dart';
+import 'package:tastie/data/weather_category.dart';
 import 'package:tastie/utils/weather_classifier.dart';
 
 /// 天气服务类 - 负责基于统一的 WeatherCategory 生成文案。

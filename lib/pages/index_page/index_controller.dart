@@ -8,7 +8,7 @@ import 'package:tastie/mock/mock_weather.dart';
 import 'package:tastie/repositories/weather_repository.dart';
 import 'package:tastie/repositories/mock_index_repository.dart';
 import 'package:tastie/utils/post_sorter.dart';
-import 'package:tastie/data/weather_tag_weight.dart';
+import 'package:tastie/data/weather_category.dart';
 import 'package:tastie/utils/weather_classifier.dart';
 
 class IndexController extends GetxController
@@ -134,7 +134,14 @@ class IndexController extends GetxController
       // ignore: avoid_print
       print('[Weather] Category (from API): $category');
     } catch (e) {
-      _handleWeatherError('Failed to load weather data: $e');
+      // 不在弹窗中暴露完整异常（包含 URL 和 API key），只给用户友好提示
+      _handleWeatherError(
+        'Failed to load weather data due to a network or server issue.\n'
+        'Please check your internet connection and try again.',
+      );
+      // 在控制台中仍然打印原始错误，方便调试
+      // ignore: avoid_print
+      print('[Weather] Error while loading weather data: $e');
     }
   }
 

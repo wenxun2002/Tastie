@@ -72,9 +72,7 @@ class _IndexDetailPageState extends State<IndexDetailPage>
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         softWrap: false,
-                        style: ColorPlate.bodyText.copyWith(
-                          fontSize: 14,
-                        ),
+                        style: ColorPlate.bodyText.copyWith(fontSize: 14),
                       ),
                     ),
                   ),
@@ -83,8 +81,10 @@ class _IndexDetailPageState extends State<IndexDetailPage>
             ),
             actions: [
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 2,
+                ),
                 decoration: const ShapeDecoration(
                   shape: StadiumBorder(
                     side: BorderSide(color: ColorPlate.primary),
@@ -113,34 +113,30 @@ class _IndexDetailPageState extends State<IndexDetailPage>
           body: NestedScrollView(
             headerSliverBuilder:
                 (BuildContext context, bool innerBoxIsScrolled) {
-              return [
-                // Image Carousel
-                SliverToBoxAdapter(
-                  child: buildImageSwiper(controller),
-                ),
-                // Title, Content, Tags, Date
-                SliverToBoxAdapter(
-                  child: buildContent(controller),
-                ),
-                // TabBar
-                SliverPersistentHeader(
-                  pinned: true,
-                  delegate: _SliverAppBarDelegate(
-                    TabBar(
-                      controller: _tabController,
-                      labelColor: Colors.black,
-                      unselectedLabelColor: ColorPlate.textSecondary,
-                      dividerColor: Colors.transparent,
-                      indicatorColor: ColorPlate.primary,
-                      tabs: const [
-                        Tab(text: "Ingredients"),
-                        Tab(text: "Procedures"),
-                      ],
+                  return [
+                    // Image Carousel
+                    SliverToBoxAdapter(child: buildImageSwiper(controller)),
+                    // Title, Content, Tags, Date
+                    SliverToBoxAdapter(child: buildContent(controller)),
+                    // TabBar
+                    SliverPersistentHeader(
+                      pinned: true,
+                      delegate: _SliverAppBarDelegate(
+                        TabBar(
+                          controller: _tabController,
+                          labelColor: Colors.black,
+                          unselectedLabelColor: ColorPlate.textSecondary,
+                          dividerColor: Colors.transparent,
+                          indicatorColor: ColorPlate.primary,
+                          tabs: const [
+                            Tab(text: "Ingredients"),
+                            Tab(text: "Procedures"),
+                          ],
+                        ),
+                      ),
                     ),
-                  ),
-                ),
-              ];
-            },
+                  ];
+                },
             body: TabBarView(
               controller: _tabController,
               children: [
@@ -185,10 +181,7 @@ class _IndexDetailPageState extends State<IndexDetailPage>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            controller.cardDetailData.title,
-            style: ColorPlate.heading2,
-          ),
+          Text(controller.cardDetailData.title, style: ColorPlate.heading2),
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 8.0),
             child: Text(
@@ -212,10 +205,7 @@ class _IndexDetailPageState extends State<IndexDetailPage>
                     decoration: BoxDecoration(
                       color: ColorPlate.secondary,
                       borderRadius: BorderRadius.circular(10),
-                      border: Border.all(
-                        color: ColorPlate.primary,
-                        width: 1.0,
-                      ),
+                      border: Border.all(color: ColorPlate.primary, width: 1.0),
                     ),
                     child: Text(
                       "#$tag",
@@ -275,10 +265,7 @@ class _IndexDetailPageState extends State<IndexDetailPage>
                           style: ColorPlate.bodyText,
                         ),
                       const SizedBox(width: 5),
-                      Text(
-                        ingredient.unit,
-                        style: ColorPlate.bodyText,
-                      ),
+                      Text(ingredient.unit, style: ColorPlate.bodyText),
                     ],
                   ),
                 ],
@@ -288,9 +275,7 @@ class _IndexDetailPageState extends State<IndexDetailPage>
           const SizedBox(height: 15),
           // Nutrition Info Section
           if (controller.cardDetailData.nutrition != null)
-            _NutritionSection(
-              nutrition: controller.cardDetailData.nutrition!,
-            ),
+            _NutritionSection(nutrition: controller.cardDetailData.nutrition!),
         ],
       ),
     );
@@ -324,12 +309,7 @@ class _IndexDetailPageState extends State<IndexDetailPage>
                 ),
               ),
               const SizedBox(width: 20),
-              Expanded(
-                child: Text(
-                  step,
-                  style: ColorPlate.bodyText,
-                ),
-              ),
+              Expanded(child: Text(step, style: ColorPlate.bodyText)),
             ],
           ),
         );
@@ -433,8 +413,8 @@ class _IndexDetailPageState extends State<IndexDetailPage>
                                     size: 20,
                                     color:
                                         controller.commentLikedMap[e.id] == true
-                                            ? Colors.red
-                                            : Colors.grey,
+                                        ? Colors.red
+                                        : Colors.grey,
                                   ),
                                   Text(e.like.toString()),
                                 ],
@@ -535,42 +515,44 @@ class _IndexDetailPageState extends State<IndexDetailPage>
     //   );
     // }
 
-    return Container(
-      decoration: BoxDecoration(
-        color: ColorPlate.backgroundWhite,
-        border: Border(
-          top: BorderSide(
-            color: ColorPlate.borderGrey.withOpacity(0.3),
-            width: 1,
+    return SafeArea(
+      child: Container(
+        decoration: BoxDecoration(
+          color: ColorPlate.backgroundWhite,
+          border: Border(
+            top: BorderSide(
+              color: ColorPlate.borderGrey.withOpacity(0.3),
+              width: 1,
+            ),
           ),
         ),
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            decoration: BoxDecoration(
-              color: ColorPlate.secondary.withOpacity(0.3),
-              borderRadius: BorderRadius.circular(20),
+        padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              decoration: BoxDecoration(
+                color: ColorPlate.secondary.withOpacity(0.3),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  buildLikeIcon(controller.cardDetailData.like),
+                  const SizedBox(width: 20),
+                  Container(
+                    width: 1,
+                    height: 24,
+                    color: ColorPlate.borderGrey.withOpacity(0.5),
+                  ),
+                  const SizedBox(width: 20),
+                  buildFavoriteIcon(controller.cardDetailData.fav),
+                ],
+              ),
             ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                buildLikeIcon(controller.cardDetailData.like),
-                const SizedBox(width: 20),
-                Container(
-                  width: 1,
-                  height: 24,
-                  color: ColorPlate.borderGrey.withOpacity(0.5),
-                ),
-                const SizedBox(width: 20),
-                buildFavoriteIcon(controller.cardDetailData.fav),
-              ],
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -590,11 +572,11 @@ class _SliverAppBarDelegate extends SliverPersistentHeaderDelegate {
 
   @override
   Widget build(
-      BuildContext context, double shrinkOffset, bool overlapsContent) {
-    return Container(
-      color: ColorPlate.backgroundWhite,
-      child: tabBar,
-    );
+    BuildContext context,
+    double shrinkOffset,
+    bool overlapsContent,
+  ) {
+    return Container(color: ColorPlate.backgroundWhite, child: tabBar);
   }
 
   @override
@@ -643,14 +625,20 @@ class _NutritionSectionState extends State<_NutritionSection> {
         Column(
           children: [
             _buildNutritionRow(
-                "Calories", widget.nutrition.calories.toString()),
+              "Calories",
+              widget.nutrition.calories.toString(),
+            ),
             _buildNutritionRow("Fat", "${widget.nutrition.fat.toInt()} g"),
             _buildNutritionRow(
-                "Carbohydrates", "${widget.nutrition.carbs.toInt()} g"),
+              "Carbohydrates",
+              "${widget.nutrition.carbs.toInt()} g",
+            ),
             _buildNutritionRow("Fiber", "${widget.nutrition.fiber.toInt()} g"),
             _buildNutritionRow("Sugar", "${widget.nutrition.sugar.toInt()} g"),
             _buildNutritionRow(
-                "Protein", "${widget.nutrition.protein.toInt()} g"),
+              "Protein",
+              "${widget.nutrition.protein.toInt()} g",
+            ),
           ],
         ),
       ],
@@ -671,14 +659,8 @@ class _NutritionSectionState extends State<_NutritionSection> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(
-            label,
-            style: ColorPlate.bodyText,
-          ),
-          Text(
-            value,
-            style: ColorPlate.bodyText,
-          ),
+          Text(label, style: ColorPlate.bodyText),
+          Text(value, style: ColorPlate.bodyText),
         ],
       ),
     );

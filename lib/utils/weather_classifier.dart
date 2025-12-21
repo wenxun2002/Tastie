@@ -1,4 +1,4 @@
-import 'package:tastie/data/weather_tag_weight.dart';
+import 'package:tastie/data/weather_category.dart';
 import 'package:tastie/models/weather_data.dart';
 
 /// 新版天气分类逻辑（用于 FYP 报告）
@@ -13,15 +13,14 @@ import 'package:tastie/models/weather_data.dart';
 /// - w.precipitation (mm/h)
 ///
 /// 优先级（waterfall）：
-/// 1. Snowy / Winter    →  WeatherCategory.stormy  （“冬天”类，主要给有雪国家用）
+/// 1. Snowy / Winter    →  WeatherCategory.winter  （"冬天"类，主要给有雪国家用）
 /// 2. Rainy / Gloomy    →  WeatherCategory.rainy
 /// 3. Extreme Heat      →  WeatherCategory.hotHumid
 /// 4. Cold / Chilly     →  WeatherCategory.cold
 /// 5. Hot & dry         →  WeatherCategory.hotDry
 /// 6. Mild / Neutral    →  WeatherCategory.neutral
 ///
-/// Nutrition Tag 权重全部交给
-/// `assets/config/weather_tag_weight.json` + `data/weather_tag_weight.dart`。
+/// Tag Policy 配置由 C-Model 系统管理（见 `data/tag_policy.dart`）。
 WeatherCategory classifyWeather(WeatherData w) {
   final String conditionText = w.condition.toLowerCase();
   final int? code = w.conditionCode;

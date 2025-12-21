@@ -1,5 +1,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!-- 网络权限：用于从 OpenWeather API 拉取天气数据 -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
     <!-- 位置权限：用于获取用户当前经纬度以调用 WeatherAPI -->
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />

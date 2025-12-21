@@ -1,24 +1,26 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:tastie/constants/pages.dart';
 import 'package:tastie/constants/color_plate.dart';
-import 'package:tastie/data/weather_tag_weight.dart';
 import 'package:tastie/pages/routes.dart';
 
-void main() async {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Load weather tag weights from JSON on app start
+  // Load .env configuration (e.g. API keys)
   try {
-    final repository = WeatherWeightRepository();
-    weatherWeights = await repository.load();
+    await dotenv.load(fileName: '.env');
   } catch (e) {
-    // If loading fails, the app will still run but weather sorting won't work
-    // In production, you might want to show an error or use fallback data
-    debugPrint('Warning: Failed to load weather weights: $e');
-    // Initialize with empty map as fallback
-    weatherWeights = {};
+    debugPrint('Warning: Failed to load .env file: $e');
   }
+
+  // NOTE: Tag policies and scoring config are now loaded on-demand
+  // When backend is ready, initialize repositories here:
+  // final tagPolicyRepo = TagPolicyRepository();
+  // final scoringConfigRepo = ScoringConfigRepository();
+  // await tagPolicyRepo.load();
+  // await scoringConfigRepo.load();
 
   runApp(const MyApp());
 }
