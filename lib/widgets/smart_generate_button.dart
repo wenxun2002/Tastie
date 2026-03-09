@@ -20,8 +20,9 @@ class SmartGenerateButton extends StatelessWidget {
         Color(0xff22D3EE),
       ],
     );
-
-    return GestureDetector(
+return Align(
+  alignment: Alignment.centerRight,
+  child: GestureDetector(
       onTap: onTap,
       child: DecoratedBox(
         decoration: BoxDecoration(
@@ -55,7 +56,8 @@ class SmartGenerateButton extends StatelessWidget {
           ),
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 }
 
