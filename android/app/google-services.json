@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "552537720302",
+    "project_id": "tastie-1701f",
+    "storage_bucket": "tastie-1701f.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:552537720302:android:794d06e79be210dd07baff",
+        "android_client_info": {
+          "package_name": "com.mmufyp.tastie"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "552537720302-brr6sda4n4d9l7e1rqo85flfoia3flce.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDShxNya7wGRS0j0njUJKb5AZS1SmVb5Fw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "552537720302-brr6sda4n4d9l7e1rqo85flfoia3flce.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

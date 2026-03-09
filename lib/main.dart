@@ -1,12 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:tastie/firebase_options.dart';
 import 'package:tastie/constants/pages.dart';
 import 'package:tastie/constants/color_plate.dart';
 import 'package:tastie/pages/routes.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
 
   // Load .env configuration (e.g. API keys)
   try {
@@ -37,7 +43,7 @@ class MyApp extends StatelessWidget {
         useMaterial3: true,
       ),
       getPages: Routes.getPages,
-      initialRoute: Pages.home,
+      initialRoute: Pages.init,
     );
   }
 }

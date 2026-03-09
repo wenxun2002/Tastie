@@ -45,6 +45,10 @@ dependencies:
   http: ^1.2.2 # 网络请求
   geolocator: ^13.0.2 # 获取定位 & 权限
   flutter_dotenv: ^6.0.0
+  firebase_core: ^4.5.0
+  firebase_auth: ^6.2.0
+  google_sign_in: ^7.2.0
+  sign_in_button: ^4.0.1
 
 dev_dependencies:
   flutter_test:

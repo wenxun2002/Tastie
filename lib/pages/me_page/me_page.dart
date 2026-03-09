@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:tastie/constants/color_plate.dart';
 import 'package:tastie/models/card_data.dart';
 import 'package:tastie/pages/index_page/widgets/card_item.dart';
@@ -112,6 +113,15 @@ class _MePageState extends State<MePage> {
   }
 
   Widget _buildUserProfileSection(BuildContext context) {
+    final User? user = FirebaseAuth.instance.currentUser;
+    final String displayName =
+        (user?.displayName != null && user!.displayName!.trim().isNotEmpty)
+            ? user.displayName!.trim()
+            : 'Tastie User';
+    final String subtitle = user?.email != null && user!.email!.isNotEmpty
+        ? user.email!
+        : 'ID: ${user?.uid ?? 'Not signed in'}';
+
     return Container(
       color: Colors.white,
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 20),
@@ -120,14 +130,19 @@ class _MePageState extends State<MePage> {
           CircleAvatar(
             radius: 32,
             backgroundColor: ColorPlate.secondary,
-            child: ClipOval(
-              child: Image.asset(
-                'assets/images/LogoTransparent.png',
-                width: 48,
-                height: 48,
-                fit: BoxFit.contain,
-              ),
-            ),
+            backgroundImage: user?.photoURL != null
+                ? NetworkImage(user!.photoURL!)
+                : null,
+            child: user?.photoURL == null
+                ? ClipOval(
+                    child: Image.asset(
+                      'assets/images/LogoTransparent.png',
+                      width: 48,
+                      height: 48,
+                      fit: BoxFit.contain,
+                    ),
+                  )
+                : null,
           ),
           const SizedBox(width: 16),
           Expanded(
@@ -135,18 +150,18 @@ class _MePageState extends State<MePage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Text(
-                  "Nihaosaoo",
-                  style: TextStyle(
+                Text(
+                  displayName,
+                  style: const TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
                     color: ColorPlate.primary,
                   ),
                 ),
                 const SizedBox(height: 4),
-                const Text(
-                  "ID: 000001",
-                  style: TextStyle(
+                Text(
+                  subtitle,
+                  style: const TextStyle(
                     fontSize: 14,
                     color: ColorPlate.textTertiary,
                   ),
@@ -162,7 +177,7 @@ class _MePageState extends State<MePage> {
               );
             },
             icon: const Icon(Icons.settings),
-            color: ColorPlate.primary,
+            color: ColorPlate.textGrey,
           ),
         ],
       ),
