@@ -1,0 +1,15 @@
+{
+  "name": "tastie-firestore-import",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "import": "node index.js",
+    "dry-run": "node index.js --dry-run",
+    "migrate-images": "node upload_images_and_update_firestore.js",
+    "migrate-images:dry-run": "node upload_images_and_update_firestore.js --dry-run"
+  },
+  "dependencies": {
+    "firebase-admin": "^13.0.2"
+  }
+}
+

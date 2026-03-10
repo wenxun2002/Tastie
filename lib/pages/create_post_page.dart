@@ -7,7 +7,7 @@ import 'package:tastie/constants/color_plate.dart';
 import 'package:tastie/constants/ingredient_units.dart';
 import 'package:tastie/models/create_post_data.dart';
 import 'package:tastie/models/tag_item.dart';
-import 'package:tastie/repositories/mock_tag_repository.dart';
+import 'package:tastie/repositories/firestore_tag_repository.dart';
 import 'package:tastie/services/create_post_service.dart';
 import 'package:tastie/widgets/photo_upload_row.dart';
 import 'package:tastie/widgets/primary_button.dart';
@@ -31,7 +31,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
 
   final TextEditingController _titleController = TextEditingController();
   final TextEditingController _contentController = TextEditingController();
-  final MockTagRepository _tagRepository = const MockTagRepository();
+  final FirestoreTagRepository _tagRepository = FirestoreTagRepository();
 
   List<TagItem> _tags = const [];
   bool _isLoadingTags = false;

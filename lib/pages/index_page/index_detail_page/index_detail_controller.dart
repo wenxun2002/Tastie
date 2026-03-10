@@ -3,7 +3,7 @@ import 'package:get/get.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:tastie/models/card_detail_data.dart';
 import 'package:tastie/models/comment.dart';
-import 'package:tastie/repositories/mock_card_detail_repository.dart';
+import 'package:tastie/repositories/firestore_card_detail_repository.dart';
 
 class IndexDetailController extends GetxController {
   late CardDetailData cardDetailData;
@@ -38,7 +38,7 @@ class IndexDetailController extends GetxController {
     // 模拟网络请求延迟
     await Future.delayed(const Duration(milliseconds: 500));
     try {
-      final repository = MockCardDetailRepository();
+      final repository = FirestoreCardDetailRepository();
       final found = await repository.getById(id);
       
       if (found != null) {

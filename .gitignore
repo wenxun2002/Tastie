@@ -41,3 +41,9 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Firebase Admin SDK service account (DO NOT COMMIT)
+/scripts/firestore_import/serviceAccountKey.json
+
+scripts/firestore_import/node_modules/
+node_modules/

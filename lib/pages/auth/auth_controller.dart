@@ -1,12 +1,14 @@
 import 'package:get/get.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:tastie/repositories/firestore_user_repository.dart';
 
 class AuthController extends GetxController {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final GoogleSignIn _googleSignIn = GoogleSignIn(
     scopes: <String>['email'],
   );
+  final FirestoreUserRepository _userRepository = FirestoreUserRepository();
 
   final Rxn<User> currentUser = Rxn<User>();
   final RxBool isLoading = false.obs;
@@ -17,6 +19,10 @@ class AuthController extends GetxController {
     currentUser.value = _auth.currentUser;
     _auth.authStateChanges().listen((user) {
       currentUser.value = user;
+      if (user != null) {
+        // Fire-and-forget: keep minimal user dataset for profile / future features.
+        _userRepository.upsertFromAuthUser(user);
+      }
     });
   }
 
@@ -48,7 +54,11 @@ class AuthController extends GetxController {
 
       final UserCredential userCredential =
           await _auth.signInWithCredential(credential);
-      return userCredential.user;
+      final user = userCredential.user;
+      if (user != null) {
+        await _userRepository.upsertFromAuthUser(user);
+      }
+      return user;
     } catch (e) {
       Get.snackbar(
         'Login failed',

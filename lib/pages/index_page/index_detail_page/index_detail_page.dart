@@ -7,6 +7,7 @@ import 'package:tastie/common/utils/image_utils.dart';
 import 'package:tastie/constants/color_plate.dart';
 import 'package:tastie/models/card_detail_data.dart';
 import 'package:tastie/pages/index_page/index_detail_page/index_detail_controller.dart';
+import 'package:tastie/pages/index_page/index_detail_page/index_detail_skeleton.dart';
 
 class IndexDetailPage extends StatefulWidget {
   const IndexDetailPage({super.key});
@@ -38,11 +39,7 @@ class _IndexDetailPageState extends State<IndexDetailPage>
     return GetBuilder<IndexDetailController>(
       builder: (_) {
         if (controller.isLoading) {
-          return Scaffold(
-            body: Center(
-              child: CircularProgressIndicator(color: ColorPlate.primary),
-            ),
-          );
+          return const IndexDetailSkeleton();
         } else if (controller.isFail) {
           return const Scaffold(
             body: Center(child: Text("Data Load Failed, Please Try Again")),

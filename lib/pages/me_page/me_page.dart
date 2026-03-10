@@ -4,8 +4,9 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:tastie/constants/color_plate.dart';
 import 'package:tastie/models/card_data.dart';
 import 'package:tastie/pages/index_page/widgets/card_item.dart';
+import 'package:tastie/pages/index_page/widgets/card_item_skeleton.dart';
 import 'package:tastie/pages/me_page/settings_screen.dart';
-import 'package:tastie/repositories/mock_index_repository.dart';
+import 'package:tastie/repositories/firestore_index_repository.dart';
 
 class MePage extends StatefulWidget {
   const MePage({super.key});
@@ -20,7 +21,7 @@ class _MePageState extends State<MePage> {
   @override
   void initState() {
     super.initState();
-    _cardsFuture = MockIndexRepository().getAll();
+    _cardsFuture = FirestoreIndexRepository().getAll();
   }
 
   @override
@@ -44,7 +45,8 @@ class _MePageState extends State<MePage> {
                   future: _cardsFuture,
                   builder: (context, snapshot) {
                     if (snapshot.connectionState == ConnectionState.waiting) {
-                      return const Center(child: CircularProgressIndicator());
+                      // Skeleton grid while loading
+                      return _buildSkeletonGrid(context);
                     }
                     if (snapshot.hasError) {
                       return Center(
@@ -235,6 +237,28 @@ class _MePageState extends State<MePage> {
               );
             },
             childCount: data.length,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSkeletonGrid(BuildContext context) {
+    return CustomScrollView(
+      slivers: [
+        SliverPadding(
+          padding: const EdgeInsets.all(12),
+          sliver: SliverMasonryGrid.count(
+            crossAxisCount: 2,
+            mainAxisSpacing: 12,
+            crossAxisSpacing: 12,
+            itemBuilder: (context, index) {
+              return CardItemSkeleton(
+                key: ValueKey('me-skeleton-$index'),
+                millisecondsDelay: (index % 6) * 120,
+              );
+            },
+            childCount: 8,
           ),
         ),
       ],

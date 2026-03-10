@@ -6,7 +6,7 @@ import 'package:tastie/models/card_data.dart';
 import 'package:tastie/models/weather_data.dart';
 import 'package:tastie/mock/mock_weather.dart';
 import 'package:tastie/repositories/weather_repository.dart';
-import 'package:tastie/repositories/mock_index_repository.dart';
+import 'package:tastie/repositories/firestore_index_repository.dart';
 import 'package:tastie/utils/post_sorter.dart';
 import 'package:tastie/data/weather_category.dart';
 import 'package:tastie/utils/weather_classifier.dart';
@@ -16,6 +16,8 @@ class IndexController extends GetxController
   late TabController tabController;
   List<CardData> _allData = []; // Original unsorted data
   List<CardData> data = []; // Sorted data for display
+  bool isInitialLoading = true; // Show skeleton until data + images ready
+  bool isDataReady = false; // Data fetched from backend
   WeatherData currentWeather = MockWeather.weatherNeutral; // Default weather
   bool isLoadingMore = false; // Loading state for infinite scroll
   String? currentLocationName; // e.g. "Kuala Lumpur, Federal Territory"
@@ -41,16 +43,31 @@ class IndexController extends GetxController
   }
 
   void loadData() async {
-    // Load mock data from JSON
+    // Start full reload with skeleton
+    isInitialLoading = true;
+    isDataReady = false;
+    update(['post_list']);
+
+    // Load data from Firestore
     try {
-      final repository = MockIndexRepository();
+      final repository = FirestoreIndexRepository();
       _allData = await repository.getAll();
       _sortData();
+      isDataReady = true;
+      update(['post_list']);
     } catch (e) {
       // Fallback: empty list if loading fails
       _allData = [];
       _sortData();
+      isDataReady = true;
+      update(['post_list']);
     }
+  }
+
+  void finalizeInitialLoad() {
+    if (!isInitialLoading) return;
+    isInitialLoading = false;
+    update(['post_list']);
   }
 
   /// 加载当前所在地的天气数据（带缓存）
@@ -147,6 +164,9 @@ class IndexController extends GetxController
 
   /// Pull-to-refresh: Clear and reload initial posts
   Future<void> refreshPosts() async {
+    // Start skeleton while refreshing
+    isInitialLoading = true;
+    isDataReady = false;
     // 1. Clear list
     data.clear();
     update(['post_list']);
@@ -156,9 +176,11 @@ class IndexController extends GetxController
       const Duration(milliseconds: 500),
     ); // Simulate network delay
     try {
-      final repository = MockIndexRepository();
+      final repository = FirestoreIndexRepository();
       _allData = await repository.getAll();
       _sortData();
+      isDataReady = true;
+      update(['post_list']);
 
       // 强制刷新天气（忽略缓存），确保下拉刷新会拿到最新天气
       await loadWeatherData(forceRefresh: true);
@@ -166,6 +188,8 @@ class IndexController extends GetxController
       // Fallback: empty list if loading fails
       _allData = [];
       _sortData();
+      isDataReady = true;
+      update(['post_list']);
     }
   }
 
@@ -182,7 +206,7 @@ class IndexController extends GetxController
     // For mock data, we'll duplicate existing data to simulate loading more
     // In real app, you would fetch from API
     try {
-      final repository = MockIndexRepository();
+      final repository = FirestoreIndexRepository();
       final morePosts = await repository.getAll();
       _allData.addAll(morePosts);
       _sortData();

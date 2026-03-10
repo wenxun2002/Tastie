@@ -44,20 +44,20 @@ class DefaultFirebaseOptions {
   }
 
   static const FirebaseOptions web = FirebaseOptions(
-    apiKey: 'AIzaSyD-zy1P6MAidLDDOr8JpRMEPc00bQP_fIU',
-    appId: '1:552537720302:web:b34eef0095924ef907baff',
-    messagingSenderId: '552537720302',
-    projectId: 'tastie-1701f',
-    authDomain: 'tastie-1701f.firebaseapp.com',
-    storageBucket: 'tastie-1701f.firebasestorage.app',
+    apiKey: 'AIzaSyDfUH4cVAQsxkt7ftnVPXYpg1YxLGQUwI0',
+    appId: '1:818788180650:web:a2fabd78bcb7035c77e6d3',
+    messagingSenderId: '818788180650',
+    projectId: 'tastie-0314x',
+    authDomain: 'tastie-0314x.firebaseapp.com',
+    storageBucket: 'tastie-0314x.firebasestorage.app',
   );
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'AIzaSyDShxNya7wGRS0j0njUJKb5AZS1SmVb5Fw',
-    appId: '1:552537720302:android:794d06e79be210dd07baff',
-    messagingSenderId: '552537720302',
-    projectId: 'tastie-1701f',
-    storageBucket: 'tastie-1701f.firebasestorage.app',
+    apiKey: 'AIzaSyAvTuK6Cz_21BIFHhBDBbYCgAAZeB2zxYo',
+    appId: '1:818788180650:android:7695a78b65e1661377e6d3',
+    messagingSenderId: '818788180650',
+    projectId: 'tastie-0314x',
+    storageBucket: 'tastie-0314x.firebasestorage.app',
   );
 
   static const FirebaseOptions ios = FirebaseOptions(

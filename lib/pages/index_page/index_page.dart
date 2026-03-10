@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'package:tastie/constants/color_plate.dart';
 import 'package:tastie/pages/index_page/widgets/card_item.dart';
+import 'package:tastie/pages/index_page/widgets/card_item_skeleton.dart';
 import 'package:tastie/pages/index_page/widgets/weather_banner.dart';
 import 'package:tastie/pages/index_page/widgets/weather_selector.dart';
 import 'index_controller.dart';
@@ -92,6 +93,8 @@ class _ExplorePageStateful extends StatefulWidget {
 
 class _ExplorePageState extends State<_ExplorePageStateful> {
   final ScrollController _scrollController = ScrollController();
+  bool _isPrecaching = false;
+  bool _hasRunInitialPrecache = false;
 
   @override
   void initState() {
@@ -117,6 +120,25 @@ class _ExplorePageState extends State<_ExplorePageStateful> {
     return GetBuilder<IndexController>(
       id: 'post_list',
       builder: (_) {
+        // After data is fetched, pre-cache images once; show skeleton until done.
+        if (widget.controller.isInitialLoading &&
+            widget.controller.isDataReady &&
+            !_isPrecaching) {
+          _isPrecaching = true;
+          // First load: pre-cache images; subsequent refresh: skip pre-cache.
+          if (_hasRunInitialPrecache) {
+            widget.controller.finalizeInitialLoad();
+            _isPrecaching = false;
+          } else {
+            _precacheExploreImages(context).whenComplete(() {
+              if (!mounted) return;
+              _hasRunInitialPrecache = true;
+              _isPrecaching = false;
+              widget.controller.finalizeInitialLoad();
+            });
+          }
+        }
+
         return RefreshIndicator(
           onRefresh: widget.controller.refreshPosts, // pull to refresh
           child: CustomScrollView(
@@ -144,6 +166,13 @@ class _ExplorePageState extends State<_ExplorePageStateful> {
                   mainAxisSpacing: 12,
                   crossAxisSpacing: 12,
                   itemBuilder: (context, index) {
+                    if (widget.controller.isInitialLoading) {
+                      return CardItemSkeleton(
+                        key: ValueKey('skeleton-$index'),
+                        millisecondsDelay: (index % 6) * 120,
+                      );
+                    }
+
                     final post = widget.controller.data[index];
                     return CardItem(
                       key: ValueKey(post.id),
@@ -151,7 +180,8 @@ class _ExplorePageState extends State<_ExplorePageStateful> {
                       onTap: () => widget.controller.openPost(post.id),
                     );
                   },
-                  childCount: widget.controller.data.length,
+                  childCount:
+                      widget.controller.isInitialLoading ? 8 : widget.controller.data.length,
                 ),
               ),
 
@@ -169,5 +199,29 @@ class _ExplorePageState extends State<_ExplorePageStateful> {
         );
       },
     );
+  }
+
+  Future<void> _precacheExploreImages(BuildContext context) async {
+    // Pre-cache a reasonable number of images for the first screen.
+    final posts = widget.controller.data;
+    final int limit = posts.length < 12 ? posts.length : 12;
+    final futures = <Future<void>>[];
+
+    for (int i = 0; i < limit; i++) {
+      final p = posts[i];
+      futures.add(_precacheAnyImage(context, p.cover));
+      futures.add(_precacheAnyImage(context, p.avatar));
+    }
+
+    await Future.wait(futures);
+  }
+
+  Future<void> _precacheAnyImage(BuildContext context, String url) async {
+    final ImageProvider provider;
+    final isNetwork = url.startsWith('http://') ||
+        url.startsWith('https://') ||
+        url.startsWith('//');
+    provider = isNetwork ? NetworkImage(url) : AssetImage(url);
+    await precacheImage(provider, context);
   }
 }
