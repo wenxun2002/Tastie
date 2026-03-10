@@ -47,7 +47,8 @@ dependencies:
   flutter_dotenv: ^6.0.0
   firebase_core: ^4.5.0
   firebase_auth: ^6.2.0
-  google_sign_in: ^7.2.0
+  # 使用 6.x 版本以支持 GoogleSignIn().signIn() 原生弹窗 API
+  google_sign_in: ^6.1.5
   sign_in_button: ^4.0.1
 
 dev_dependencies:

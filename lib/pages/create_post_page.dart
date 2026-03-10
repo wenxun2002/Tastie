@@ -160,9 +160,9 @@ class _CreatePostPageState extends State<CreatePostPage> {
     final data = _buildCreatePostData();
     // Simulate sending to backend by logging the complete payload.
     CreatePostService.logCreatePostPayload(data);
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('Submit coming soon')));
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Submit coming soon')),
+    );
   }
 
   CreatePostData _buildCreatePostData() {
