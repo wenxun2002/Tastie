@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:fade_shimmer/fade_shimmer.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 /// 图片加载工具类
 /// 自动判断是本地资源还是网络URL
@@ -21,15 +22,42 @@ class ImageUtils {
     Key? key,
   }) {
     if (isNetworkUrl(url)) {
-      return Image.network(
-        url,
+      final double shimmerWidth =
+          (width == null || width == double.infinity) ? 80 : width;
+      final double shimmerHeight =
+          (height == null || height == double.infinity) ? 80 : height;
+
+      final int? memCacheWidth =
+          (width != null && width != double.infinity) ? (width * 2).toInt() : null;
+      final int? memCacheHeight =
+          (height != null && height != double.infinity) ? (height * 2).toInt() : null;
+
+      return CachedNetworkImage(
+        imageUrl: url,
+        cacheKey: url,
         key: key ?? ValueKey(url),
         width: width,
         height: height,
         fit: fit,
         color: color,
-        errorBuilder: (context, error, stackTrace) {
-          debugPrint('ImageUtils: Network image load failed: $url');
+        memCacheWidth: memCacheWidth,
+        memCacheHeight: memCacheHeight,
+        maxWidthDiskCache: memCacheWidth,
+        maxHeightDiskCache: memCacheHeight,
+        placeholder: (context, _) => Container(
+          width: width,
+          height: height,
+          color: Colors.grey[200],
+          child: FadeShimmer(
+            width: shimmerWidth,
+            height: shimmerHeight,
+            radius: 0,
+            fadeTheme: FadeTheme.light,
+            millisecondsDelay: 0,
+          ),
+        ),
+        errorWidget: (context, _, error) {
+          debugPrint('ImageUtils: Network image load failed: $url ($error)');
           return Container(
             width: width,
             height: height,
@@ -37,42 +65,16 @@ class ImageUtils {
             child: const Icon(Icons.error, color: Colors.grey),
           );
         },
-        loadingBuilder: (context, child, loadingProgress) {
-          if (loadingProgress == null) return child;
-          final double shimmerWidth = (width == null || width == double.infinity)
-              ? 80
-              : width;
-          final double shimmerHeight = (height == null || height == double.infinity)
-              ? 80
-              : height;
-          return Container(
-            width: width,
-            height: height,
-            color: Colors.grey[200],
-            child: FadeShimmer(
-              width: shimmerWidth,
-              height: shimmerHeight,
-              radius: 0,
-              fadeTheme: FadeTheme.light,
-              millisecondsDelay: 0,
-            ),
-          );
-        },
       );
     } else {
       // 本地资源 - 使用缓存优化性能
-      // 计算缓存尺寸，限制内存占用
-      // 对于瀑布流两列布局，每列宽度约为屏幕宽度的一半
-      // 使用 MediaQuery 获取屏幕宽度，但这里简化处理
       int? cacheWidth;
       if (width != null && width != double.infinity) {
-        // 限制缓存宽度，减少内存占用（2x for retina display）
         cacheWidth = (width * 2).toInt();
       } else {
-        // 如果没有指定宽度，使用合理的默认值（假设屏幕宽度400，两列各200）
         cacheWidth = 400; // 2x for retina = 800px max
       }
-      
+
       return Image.asset(
         url,
         key: key ?? ValueKey(url),
@@ -103,4 +105,3 @@ class ImageUtils {
     }
   }
 }
-

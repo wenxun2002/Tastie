@@ -1,4 +1,8 @@
+import 'dart:io';
+
 import 'package:get/get.dart';
+import 'package:flutter_image_compress/flutter_image_compress.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:tastie/constants/ingredient_units.dart';
 import 'package:tastie/models/create_post_data.dart';
 import 'package:tastie/models/recipe_firestore.dart';
@@ -39,17 +43,23 @@ class CreateRecipeService {
     final authorNickname = user.displayName ?? 'User';
     final authorAvatar = user.photoURL ?? '';
 
-    // 1. Upload images
-    onProgress?.call('Uploading images...');
+    // 1. Compress + upload images
+    onProgress?.call('Compressing images...');
     List<String> imageUrls = [];
     if (data.photos.isNotEmpty) {
-      // Update progress per image (at least shows which one is hanging).
+      final compressedPhotos = await _compressPhotos(
+        data.photos,
+        userId: userId,
+        onProgress: onProgress,
+      );
+
+      onProgress?.call('Uploading images...');
       final urls = <String>[];
-      for (var i = 0; i < data.photos.length; i++) {
-        onProgress?.call('Uploading images... (${i + 1}/${data.photos.length})');
+      for (var i = 0; i < compressedPhotos.length; i++) {
+        onProgress?.call('Uploading images... (${i + 1}/${compressedPhotos.length})');
         final url = await _storage.uploadImage(
           userId: userId,
-          filePath: data.photos[i],
+          filePath: compressedPhotos[i],
           suffix: 'img_${DateTime.now().millisecondsSinceEpoch}_$i',
         );
         urls.add(url);
@@ -94,6 +104,57 @@ class CreateRecipeService {
 
     final docId = await _repository.create(recipe);
     return docId;
+  }
+
+  /// Compresses photos before upload, preserving aspect ratio (no crop).
+  /// - quality: 80
+  /// - minWidth: 1080 (high-res images will be scaled down proportionally)
+  Future<List<String>> _compressPhotos(
+    List<String> originalPaths, {
+    required String userId,
+    CreateRecipeProgressCallback? onProgress,
+  }) async {
+    final resultPaths = <String>[];
+    if (originalPaths.isEmpty) return resultPaths;
+
+    final tempDir = await getTemporaryDirectory();
+
+    for (var i = 0; i < originalPaths.length; i++) {
+      final srcPath = originalPaths[i];
+      onProgress?.call('Compressing images... (${i + 1}/${originalPaths.length})');
+
+      final srcFile = File(srcPath);
+      if (!await srcFile.exists()) {
+        resultPaths.add(srcPath);
+        continue;
+      }
+
+      final targetPath =
+          '${tempDir.path}/recipe_${userId}_${DateTime.now().millisecondsSinceEpoch}_$i.jpg';
+
+      try {
+        final compressed = await FlutterImageCompress.compressAndGetFile(
+          srcFile.path,
+          targetPath,
+          quality: 80,
+          minWidth: 1080,
+        );
+
+       if (compressed != null &&
+          await File(compressed.path).exists()) {
+        resultPaths.add(compressed.path);
+      } else {
+        resultPaths.add(srcPath);
+      }
+      } catch (e) {
+        // Avoid failing the whole flow because of one compression error.
+        // ignore: avoid_print
+        print('Image compress failed for $srcPath: $e');
+        resultPaths.add(srcPath);
+      }
+    }
+
+    return resultPaths;
   }
 }
 

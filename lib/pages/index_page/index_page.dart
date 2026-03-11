@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'package:tastie/constants/color_plate.dart';
+import 'package:tastie/constants/pages.dart';
 import 'package:tastie/pages/index_page/widgets/card_item.dart';
 import 'package:tastie/pages/index_page/widgets/card_item_skeleton.dart';
 import 'package:tastie/pages/index_page/widgets/weather_banner.dart';
@@ -171,7 +172,20 @@ class _ExplorePageState extends State<_ExplorePageStateful> {
                     return CardItem(
                       key: ValueKey(post.id),
                       cardData: post,
-                      onTap: () => widget.controller.openPost(post.id),
+                      onTap: () async {
+                        final result = await Get.toNamed(
+                          Pages.indexDetail,
+                          arguments: {"id": post.id},
+                        );
+                        if (!context.mounted) return;
+                        if (result == true) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Recipe deleted successfully.'),
+                            ),
+                          );
+                        }
+                      },
                     );
                   },
                   childCount:
@@ -197,17 +211,21 @@ class _ExplorePageState extends State<_ExplorePageStateful> {
 
   Future<void> _precacheExploreImages(BuildContext context) async {
     // Pre-cache a reasonable number of images for the first screen.
+    // 优化：只预加载封面图，且最多 6 条，避免首屏等待过久。
     final posts = widget.controller.data;
-    final int limit = posts.length < 12 ? posts.length : 12;
+    final int limit = posts.length < 6 ? posts.length : 6;
     final futures = <Future<void>>[];
 
     for (int i = 0; i < limit; i++) {
       final p = posts[i];
       futures.add(_precacheAnyImage(context, p.cover));
-      futures.add(_precacheAnyImage(context, p.avatar));
     }
 
-    await Future.wait(futures);
+    try {
+      await Future.wait(futures);
+    } catch (_) {
+      // 忽略单张图片预加载失败，避免阻塞 skeleton。
+    }
   }
 
   Future<void> _precacheAnyImage(BuildContext context, String url) async {

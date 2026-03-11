@@ -32,6 +32,20 @@ class FirestoreRecipeRepository {
         .toList();
   }
 
+  /// Watches recipes by user ID, newest first (auto-updates on create/delete).
+  Stream<List<RecipeFirestore>> watchByUserId(String userId) {
+    return _db
+        .collection(_collection)
+        .where('userId', isEqualTo: userId)
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .map(
+          (snapshot) => snapshot.docs
+              .map((doc) => RecipeFirestore.fromFirestore(doc.id, doc.data()))
+              .toList(growable: false),
+        );
+  }
+
   /// Gets a single recipe by document ID. Returns null if not found.
   Future<RecipeFirestore?> getById(String id) async {
     final doc = await _db.collection(_collection).doc(id).get();

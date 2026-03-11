@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
@@ -6,6 +7,8 @@ import 'package:tastie/models/recipe_firestore.dart';
 import 'package:tastie/models/comment.dart';
 import 'package:tastie/pages/auth/auth_controller.dart';
 import 'package:tastie/repositories/firestore_recipe_repository.dart';
+import 'package:tastie/services/recipe_storage_service.dart';
+import 'package:tastie/pages/index_page/index_controller.dart';
 
 class IndexDetailController extends GetxController {
   late RecipeFirestore recipe;
@@ -108,8 +111,64 @@ class IndexDetailController extends GetxController {
   }
 
   /// Delete own recipe. Placeholder for future implementation.
-  void deleteRecipe() {
-    // TODO: implement delete (e.g. confirm dialog, remove from Firestore, then pop).
+  /// Deletes recipe and pops the detail page with result=true when success.
+  Future<void> deleteRecipe(BuildContext context) async {
+    if (!isOwnPost) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('You can only delete your own recipe.')),
+      );
+      return;
+    }
+
+    final bool? confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete recipe?'),
+        content: const Text(
+          'This action cannot be undone. The recipe will be removed from your profile and the home feed.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xffd32f2f),
+            ),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    try {
+      await FirestoreRecipeRepository().delete(id);
+
+      // Best-effort: delete images in Storage (ignore failure)
+      try {
+        await RecipeStorageService().deleteByUrls(recipe.imageUrls);
+      } catch (_) {}
+
+      if (context.mounted) {
+        // Close detail page and let previous page show feedback.
+        Navigator.pop(context, true);
+      }
+
+      // Refresh home feed if it's alive in memory.
+      try {
+        final index = Get.find<IndexController>();
+        await index.refreshPosts();
+      } catch (_) {}
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Delete failed: $e')),
+        );
+      }
+    }
   }
 }
 

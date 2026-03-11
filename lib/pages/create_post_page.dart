@@ -187,64 +187,79 @@ class _CreatePostPageState extends State<CreatePostPage> {
   }
 
   Future<void> _submit() async {
+    // 1. 本地校验（不触发网络）
     final data = _buildCreatePostData();
     if (data.title.trim().isEmpty) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Please enter a title')));
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Please enter a title')),
+        );
+      }
       return;
     }
+
+    // 2. 进入提交状态
     setState(() {
       _isSubmitting = true;
       _submitError = null;
       _submitProgress = 'Preparing...';
     });
+
     try {
       final service = CreateRecipeService();
+
       await service.createRecipe(
         data,
         onProgress: (message) {
-          if (mounted) setState(() => _submitProgress = message);
+          if (!mounted) return;
+          setState(() => _submitProgress = message);
         },
       );
-      if (!mounted) return;
-      setState(() {
-        _isSubmitting = false;
-        _submitProgress = null;
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Recipe published successfully')),
-      );
-      // UX: navigate to Home immediately, then trigger refresh so user sees skeleton.
-      Get.back<void>();
+
+      if (!context.mounted) return;
+
+      // 提交成功：先返回上一页（Home / Me），并给上一页一个 result
+      Navigator.pop(context, true);
+
+      // 回到 Home 后刷新 feed（不阻塞当前页面关闭）
       Future.microtask(() async {
         try {
-          // Ensure we are on Home tab.
+          // 确保切到 Home tab
           final home = Get.find<HomeController>();
           home.onChangePage(0);
         } catch (_) {}
+
         try {
           final index = Get.find<IndexController>();
-          // Do not await in UI thread before navigation; this will show skeleton.
           await index.refreshPosts();
         } catch (_) {}
+
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Recipe published successfully')),
+          );
+        }
       });
     } catch (e, st) {
-      if (mounted) {
-        setState(() {
-          _isSubmitting = false;
-          _submitProgress = null;
-          _submitError = e is CreateRecipeException ? e.message : e.toString();
-        });
+      // ignore: avoid_print
+      print('CreateRecipe error: $e\n$st');
+      if (context.mounted) {
+        final message =
+            e is CreateRecipeException ? e.message : e.toString();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to publish: ${_submitError ?? e}'),
+            content: Text('Failed to publish: $message'),
             duration: const Duration(seconds: 4),
           ),
         );
       }
-      // ignore: avoid_print
-      print('CreateRecipe error: $e\n$st');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSubmitting = false;
+          _submitProgress = null;
+        });
+      }
     }
   }
 

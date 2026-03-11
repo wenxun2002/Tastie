@@ -31,11 +31,11 @@ class _IndexDetailPageState extends State<IndexDetailPage>
   }
 
   void _showDetailMoreMenu(
-      BuildContext context, IndexDetailController controller) {
+      BuildContext parentContext, IndexDetailController controller) {
     showModalBottomSheet<void>(
-      context: context,
+      context: parentContext,
       backgroundColor: Colors.transparent,
-      builder: (context) => Container(
+      builder: (sheetContext) => Container(
         decoration: BoxDecoration(
           color: ColorPlate.backgroundWhite,
           borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
@@ -48,7 +48,7 @@ class _IndexDetailPageState extends State<IndexDetailPage>
                 leading: const Icon(Icons.flag_outlined, color: ColorPlate.textSecondary),
                 title: Text('Report', style: ColorPlate.bodyText),
                 onTap: () {
-                  Navigator.pop(context);
+                  Navigator.pop(sheetContext);
                   controller.report();
                 },
               ),
@@ -56,7 +56,7 @@ class _IndexDetailPageState extends State<IndexDetailPage>
                 leading: const Icon(Icons.share, color: ColorPlate.primary),
                 title: Text('Share', style: ColorPlate.bodyText),
                 onTap: () {
-                  Navigator.pop(context);
+                  Navigator.pop(sheetContext);
                   controller.share();
                 },
               ),
@@ -65,8 +65,8 @@ class _IndexDetailPageState extends State<IndexDetailPage>
                   leading: const Icon(Icons.delete_outline, color: Colors.red),
                   title: Text('Delete', style: ColorPlate.bodyText.copyWith(color: Colors.red)),
                   onTap: () {
-                    Navigator.pop(context);
-                    controller.deleteRecipe();
+                    Navigator.pop(sheetContext);
+                    controller.deleteRecipe(parentContext);
                   },
                 ),
             ],
