@@ -1,7 +1,10 @@
 class CardData {
-  final int id;
-  final int uid;
+  /// Firestore document id.
+  final String id;
+  /// Firebase Auth uid of the author.
+  final String uid;
   final String cover; // 封面图片
+  final String title; // 标题
   final String content; // 内容描述
   final String avatar; // 用户头像
   final String nickname; // 用户昵称
@@ -14,6 +17,7 @@ class CardData {
     required this.id,
     required this.uid,
     required this.cover,
+    required this.title,
     required this.content,
     required this.avatar,
     required this.nickname,
@@ -31,9 +35,10 @@ class CardData {
 
   factory CardData.fromJson(Map<String, dynamic> json) {
     return CardData(
-      id: json['id'] as int,
-      uid: json['uid'] as int,
+      id: json['id'] as String,
+      uid: json['uid'] as String,
       cover: json['cover'] as String,
+      title: json['title'] as String,
       content: json['content'] as String,
       avatar: json['avatar'] as String,
       nickname: json['nickname'] as String,
@@ -49,6 +54,7 @@ class CardData {
       'id': id,
       'uid': uid,
       'cover': cover,
+      'title': title,
       'content': content,
       'avatar': avatar,
       'nickname': nickname,

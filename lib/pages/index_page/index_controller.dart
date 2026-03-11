@@ -297,12 +297,12 @@ class IndexController extends GetxController
     update(['post_list']); // Only update post_list, not entire page
   }
 
-  void openIndexDetailPage(int id) {
+  void openIndexDetailPage(String id) {
     Get.toNamed(Pages.indexDetail, arguments: {"id": id});
   }
 
   // Alias for compatibility
-  void openPost(int id) {
+  void openPost(String id) {
     openIndexDetailPage(id);
   }
 }

@@ -2,10 +2,8 @@ import 'package:card_swiper/card_swiper.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:tastie/common/utils/date_utils.dart';
 import 'package:tastie/common/utils/image_utils.dart';
 import 'package:tastie/constants/color_plate.dart';
-import 'package:tastie/models/card_detail_data.dart';
 import 'package:tastie/pages/index_page/index_detail_page/index_detail_controller.dart';
 import 'package:tastie/pages/index_page/index_detail_page/index_detail_skeleton.dart';
 
@@ -32,6 +30,52 @@ class _IndexDetailPageState extends State<IndexDetailPage>
     super.dispose();
   }
 
+  void _showDetailMoreMenu(
+      BuildContext context, IndexDetailController controller) {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        decoration: BoxDecoration(
+          color: ColorPlate.backgroundWhite,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+        ),
+        child: SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.flag_outlined, color: ColorPlate.textSecondary),
+                title: Text('Report', style: ColorPlate.bodyText),
+                onTap: () {
+                  Navigator.pop(context);
+                  controller.report();
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.share, color: ColorPlate.primary),
+                title: Text('Share', style: ColorPlate.bodyText),
+                onTap: () {
+                  Navigator.pop(context);
+                  controller.share();
+                },
+              ),
+              if (controller.isOwnPost)
+                ListTile(
+                  leading: const Icon(Icons.delete_outline, color: Colors.red),
+                  title: Text('Delete', style: ColorPlate.bodyText.copyWith(color: Colors.red)),
+                  onTap: () {
+                    Navigator.pop(context);
+                    controller.deleteRecipe();
+                  },
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final IndexDetailController controller = Get.put(IndexDetailController());
@@ -51,7 +95,7 @@ class _IndexDetailPageState extends State<IndexDetailPage>
               children: [
                 ClipOval(
                   child: ImageUtils.loadImage(
-                    controller.cardDetailData.avatar,
+                    controller.recipe.authorAvatar,
                     width: 38,
                     height: 38,
                     fit: BoxFit.cover,
@@ -65,7 +109,7 @@ class _IndexDetailPageState extends State<IndexDetailPage>
                         print("Open author profile placeholder");
                       },
                       child: Text(
-                        controller.cardDetailData.nickname,
+                        controller.recipe.authorNickname,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         softWrap: false,
@@ -97,11 +141,9 @@ class _IndexDetailPageState extends State<IndexDetailPage>
               Padding(
                 padding: const EdgeInsets.only(left: 12.0, right: 14),
                 child: IconButton(
-                  icon: const Icon(Icons.share, size: 20),
+                  icon: const Icon(Icons.more_vert, size: 20),
                   color: ColorPlate.primary,
-                  onPressed: () {
-                    controller.share();
-                  },
+                  onPressed: () => _showDetailMoreMenu(context, controller),
                 ),
               ),
             ],
@@ -154,13 +196,13 @@ class _IndexDetailPageState extends State<IndexDetailPage>
       child: Swiper(
         itemBuilder: (BuildContext context, int index) {
           return ImageUtils.loadImage(
-            controller.cardDetailData.images[index],
+            controller.recipe.imageUrls[index],
             width: Get.width,
             fit: BoxFit.contain,
           );
         },
         loop: false,
-        itemCount: controller.cardDetailData.images.length,
+        itemCount: controller.recipe.imageUrls.length,
         indicatorLayout: PageIndicatorLayout.SCALE,
         pagination: SwiperPagination(
           builder: DotSwiperPaginationBuilder(
@@ -178,22 +220,22 @@ class _IndexDetailPageState extends State<IndexDetailPage>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(controller.cardDetailData.title, style: ColorPlate.heading2),
+          Text(controller.recipe.title, style: ColorPlate.heading2),
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 8.0),
             child: Text(
-              controller.cardDetailData.content,
+              controller.recipe.content,
               style: ColorPlate.bodyText,
             ),
           ),
           // Tags section - between content and date
-          if (controller.cardDetailData.tags.isNotEmpty)
+          if (controller.recipe.tags.isNotEmpty)
             Padding(
               padding: const EdgeInsets.only(top: 8.0, bottom: 8.0),
               child: Wrap(
                 spacing: 8.0,
                 runSpacing: 8.0,
-                children: controller.cardDetailData.tags.map((tag) {
+                children: controller.recipe.tags.map((tag) {
                   return Container(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 8.0,
@@ -216,7 +258,7 @@ class _IndexDetailPageState extends State<IndexDetailPage>
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 8.0),
             child: Text(
-              "${controller.cardDetailData.date} ${controller.cardDetailData.address}",
+              "",
               style: ColorPlate.caption,
             ),
           ),
@@ -232,7 +274,10 @@ class _IndexDetailPageState extends State<IndexDetailPage>
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Ingredients List
-          ...controller.cardDetailData.ingredients.map<Widget>((ingredient) {
+          ...controller.recipe.ingredients.map<Widget>((ingredient) {
+            final name = (ingredient['name'] ?? '').toString();
+            final amount = ingredient['amount'];
+            final unit = (ingredient['unit'] ?? '').toString();
             return Container(
               decoration: BoxDecoration(
                 border: Border(
@@ -248,7 +293,7 @@ class _IndexDetailPageState extends State<IndexDetailPage>
                 children: [
                   Expanded(
                     child: Text(
-                      ingredient.name,
+                      name,
                       style: ColorPlate.bodyText,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -256,13 +301,13 @@ class _IndexDetailPageState extends State<IndexDetailPage>
                   Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      if (ingredient.amount > 0)
+                      if (amount is num && amount > 0)
                         Text(
-                          ingredient.amount.toString(),
+                          amount.toString(),
                           style: ColorPlate.bodyText,
                         ),
                       const SizedBox(width: 5),
-                      Text(ingredient.unit, style: ColorPlate.bodyText),
+                      Text(unit, style: ColorPlate.bodyText),
                     ],
                   ),
                 ],
@@ -271,8 +316,8 @@ class _IndexDetailPageState extends State<IndexDetailPage>
           }).toList(),
           const SizedBox(height: 15),
           // Nutrition Info Section
-          if (controller.cardDetailData.nutrition != null)
-            _NutritionSection(nutrition: controller.cardDetailData.nutrition!),
+          if (controller.recipe.nutrition != null)
+            _NutritionSection(nutrition: controller.recipe.nutrition!),
         ],
       ),
     );
@@ -281,9 +326,9 @@ class _IndexDetailPageState extends State<IndexDetailPage>
   Widget buildProceduresTab(IndexDetailController controller) {
     return ListView.builder(
       padding: const EdgeInsets.symmetric(horizontal: 10.0, vertical: 5.0),
-      itemCount: controller.cardDetailData.procedures.length,
+      itemCount: controller.recipe.procedures.length,
       itemBuilder: (context, index) {
-        final step = controller.cardDetailData.procedures[index];
+        final step = controller.recipe.procedures[index];
         return Container(
           margin: const EdgeInsets.only(bottom: 5.0),
           padding: const EdgeInsets.all(10.0),
@@ -378,8 +423,7 @@ class _IndexDetailPageState extends State<IndexDetailPage>
                                         text: e.content,
                                         children: [
                                           TextSpan(
-                                            text:
-                                                "  ${SDateUtils.formatDate(e.createDate)}",
+                                            text: "",
                                             style: ColorPlate.caption,
                                           ),
                                           TextSpan(
@@ -536,7 +580,7 @@ class _IndexDetailPageState extends State<IndexDetailPage>
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  buildLikeIcon(controller.cardDetailData.like),
+                  buildLikeIcon(controller.recipe.likeCount),
                   const SizedBox(width: 20),
                   Container(
                     width: 1,
@@ -544,7 +588,7 @@ class _IndexDetailPageState extends State<IndexDetailPage>
                     color: ColorPlate.borderGrey.withOpacity(0.5),
                   ),
                   const SizedBox(width: 20),
-                  buildFavoriteIcon(controller.cardDetailData.fav),
+                  buildFavoriteIcon(controller.recipe.favCount),
                 ],
               ),
             ),
@@ -584,7 +628,7 @@ class _SliverAppBarDelegate extends SliverPersistentHeaderDelegate {
 
 // Nutrition Section with expandable animation
 class _NutritionSection extends StatefulWidget {
-  final Nutrition nutrition;
+  final Map<String, dynamic> nutrition;
 
   const _NutritionSection({required this.nutrition});
 
@@ -623,18 +667,18 @@ class _NutritionSectionState extends State<_NutritionSection> {
           children: [
             _buildNutritionRow(
               "Calories",
-              widget.nutrition.calories.toString(),
+              (widget.nutrition['calories'] ?? '').toString(),
             ),
-            _buildNutritionRow("Fat", "${widget.nutrition.fat.toInt()} g"),
+            _buildNutritionRow("Fat", "${(widget.nutrition['fat'] ?? 0).toString()} g"),
             _buildNutritionRow(
               "Carbohydrates",
-              "${widget.nutrition.carbs.toInt()} g",
+              "${(widget.nutrition['carbs'] ?? 0).toString()} g",
             ),
-            _buildNutritionRow("Fiber", "${widget.nutrition.fiber.toInt()} g"),
-            _buildNutritionRow("Sugar", "${widget.nutrition.sugar.toInt()} g"),
+            _buildNutritionRow("Fiber", "${(widget.nutrition['fiber'] ?? 0).toString()} g"),
+            _buildNutritionRow("Sugar", "${(widget.nutrition['sugar'] ?? 0).toString()} g"),
             _buildNutritionRow(
               "Protein",
-              "${widget.nutrition.protein.toInt()} g",
+              "${(widget.nutrition['protein'] ?? 0).toString()} g",
             ),
           ],
         ),

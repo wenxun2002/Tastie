@@ -57,6 +57,7 @@ class FirestoreCardDetailRepository {
       ...json,
       'id': toInt(json['id']),
       'uid': toInt(json['uid']),
+      if (json['authorUid'] != null) 'authorUid': json['authorUid'] as String,
       'fav': toInt(json['fav']),
       'like': toInt(json['like']),
       'commentCount': toInt(json['commentCount'] ?? 0),

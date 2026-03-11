@@ -93,6 +93,8 @@ class Author {
 class CardDetailData {
   final int id;
   final int uid;
+  /// Optional Firebase Auth UID of the author; used to show Delete when viewing own post.
+  final String? authorUid;
   final String title;
   final String content;
   final Author author;
@@ -110,6 +112,7 @@ class CardDetailData {
   CardDetailData({
     required this.id,
     required this.uid,
+    this.authorUid,
     required this.title,
     required this.content,
     required this.author,
@@ -133,6 +136,7 @@ class CardDetailData {
     return CardDetailData(
       id: json['id'] as int,
       uid: json['uid'] as int,
+      authorUid: json['authorUid'] as String?,
       title: json['title'] as String,
       content: json['content'] as String,
       author: Author.fromJson(json['author'] as Map<String, dynamic>),
@@ -161,6 +165,7 @@ class CardDetailData {
     return {
       'id': id,
       'uid': uid,
+      if (authorUid != null) 'authorUid': authorUid,
       'title': title,
       'content': content,
       'author': author.toJson(),

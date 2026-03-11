@@ -1,13 +1,15 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:share_plus/share_plus.dart';
-import 'package:tastie/models/card_detail_data.dart';
+import 'package:tastie/models/recipe_firestore.dart';
 import 'package:tastie/models/comment.dart';
-import 'package:tastie/repositories/firestore_card_detail_repository.dart';
+import 'package:tastie/pages/auth/auth_controller.dart';
+import 'package:tastie/repositories/firestore_recipe_repository.dart';
 
 class IndexDetailController extends GetxController {
-  late CardDetailData cardDetailData;
-  late int id;
+  late RecipeFirestore recipe;
+  late String id;
   bool isLoading = true;
   bool isFail = false;
   List<Comment> commentList = [];
@@ -23,36 +25,27 @@ class IndexDetailController extends GetxController {
     // 获取传递的参数
     final args = Get.arguments;
     final dynamic argId = (args is Map) ? args["id"] : null;
-    if (argId is int) {
+    if (argId is String && argId.trim().isNotEmpty) {
       id = argId;
-    } else if (argId is String) {
-      id = int.tryParse(argId) ?? 1;
     } else {
-      id = 1; // fallback，防止热重启或无参数时崩溃
+      id = ''; // fallback
     }
     getIndexDetailData(id);
     getCommentList();
   }
 
-  void getIndexDetailData(int id) async {
+  void getIndexDetailData(String id) async {
     // 模拟网络请求延迟
     await Future.delayed(const Duration(milliseconds: 500));
     try {
-      final repository = FirestoreCardDetailRepository();
+      final repository = FirestoreRecipeRepository();
       final found = await repository.getById(id);
       
       if (found != null) {
-        cardDetailData = found;
+        recipe = found;
         isFail = false;
       } else {
-        // Fallback: get first item if ID not found
-        final allData = await repository.getAll();
-        if (allData.isNotEmpty) {
-          cardDetailData = allData.first;
-          isFail = false;
-        } else {
-          isFail = true;
-        }
+        isFail = true;
       }
     } catch (e) {
       isFail = true;
@@ -96,46 +89,68 @@ class IndexDetailController extends GetxController {
 
   // 分享功能
   Future<void> share() {
-    return onShare(cardDetailData);
+    final shareText = buildShareText(recipe);
+    return onShareText(shareText);
+  }
+
+  /// Whether the current user is the author of this recipe (for showing Delete option).
+  /// Requires card to have [CardDetailData.authorUid] set (e.g. from Firestore when creating post).
+  bool get isOwnPost {
+    final auth = Get.find<AuthController>();
+    final User? user = auth.currentUser.value;
+    if (user == null) return false;
+    return user.uid == recipe.userId;
+  }
+
+  /// Report this recipe. Placeholder for future implementation.
+  void report() {
+    // TODO: implement report (e.g. open report dialog, call API).
+  }
+
+  /// Delete own recipe. Placeholder for future implementation.
+  void deleteRecipe() {
+    // TODO: implement delete (e.g. confirm dialog, remove from Firestore, then pop).
   }
 }
 
-/// Build formatted shareable text from card detail
-String buildShareText(CardDetailData detail) {
+/// Build formatted shareable text from recipe detail
+String buildShareText(RecipeFirestore recipe) {
   final buffer = StringBuffer();
-  
+
   // Title
-  buffer.writeln(detail.title);
+  buffer.writeln(recipe.title);
   buffer.writeln();
-  
+
   // Ingredients
   buffer.writeln("Ingredients:");
-  for (final ingredient in detail.ingredients) {
-    buffer.writeln("${ingredient.name} - ${ingredient.amount}${ingredient.unit}");
+  for (final ingredient in recipe.ingredients) {
+    final name = (ingredient['name'] ?? '').toString();
+    final amount = ingredient['amount'];
+    final unit = (ingredient['unit'] ?? '').toString();
+    if (amount == null || (amount is num && amount == 0)) {
+      buffer.writeln("$name - $unit");
+    } else {
+      buffer.writeln("$name - $amount$unit");
+    }
   }
   buffer.writeln();
-  
+
   // Procedures
   buffer.writeln("Procedures:");
-  for (int i = 0; i < detail.procedures.length; i++) {
+  for (int i = 0; i < recipe.procedures.length; i++) {
     // Auto-number each step, remove any existing numbers
-    String step = detail.procedures[i];
+    String step = recipe.procedures[i];
     // Remove leading numbers and dots if present
     step = step.replaceFirst(RegExp(r'^\d+\.?\s*'), '');
     buffer.writeln("${i + 1}. $step");
   }
-  
+
   return buffer.toString();
 }
 
-/// Share card detail: opens share sheet and copies to clipboard
-Future<void> onShare(CardDetailData detail) async {
-  final shareText = buildShareText(detail);
-  
-  // Open native share sheet
+/// Share text: opens share sheet and copies to clipboard
+Future<void> onShareText(String shareText) async {
   await SharePlus.instance.share(ShareParams(text: shareText));
-  
-  // Copy to clipboard
   Clipboard.setData(ClipboardData(text: shareText));
 }
 

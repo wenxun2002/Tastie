@@ -7,11 +7,13 @@ import 'package:tastie/constants/color_plate.dart';
 
 class PhotoUploadRow extends StatefulWidget {
   final int maxPhotos;
+  final List<XFile> initialPhotos;
   final ValueChanged<List<XFile>>? onChanged;
 
   const PhotoUploadRow({
     super.key,
     this.maxPhotos = 6,
+    this.initialPhotos = const [],
     this.onChanged,
   });
 
@@ -23,16 +25,36 @@ class _PhotoUploadRowState extends State<PhotoUploadRow> {
   final ImagePicker _picker = ImagePicker();
   final List<XFile> _photos = [];
 
-  Future<void> _pickImage() async {
+  @override
+  void initState() {
+    super.initState();
+    _photos
+      ..clear()
+      ..addAll(widget.initialPhotos);
+  }
+
+  @override
+  void didUpdateWidget(covariant PhotoUploadRow oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Keep in sync with parent-controlled state.
+    if (!listEquals(oldWidget.initialPhotos, widget.initialPhotos)) {
+      _photos
+        ..clear()
+        ..addAll(widget.initialPhotos);
+    }
+  }
+
+  Future<void> _pickImages() async {
     if (_photos.length >= widget.maxPhotos) return;
-    final XFile? image = await _picker.pickImage(
-      source: ImageSource.gallery,
+    final remaining = widget.maxPhotos - _photos.length;
+    final List<XFile> images = await _picker.pickMultiImage(
       imageQuality: 85,
     );
-    if (image != null) {
-      setState(() => _photos.add(image));
-      widget.onChanged?.call(List.unmodifiable(_photos));
-    }
+    if (images.isEmpty) return;
+    final picked = images.take(remaining).toList(growable: false);
+    if (!mounted) return;
+    setState(() => _photos.addAll(picked));
+    widget.onChanged?.call(List.unmodifiable(_photos));
   }
 
   @override
@@ -47,7 +69,7 @@ class _PhotoUploadRowState extends State<PhotoUploadRow> {
       ],
       if (_photos.length < widget.maxPhotos)
         PhotoUploadButton(
-          onTap: _pickImage,
+          onTap: _pickImages,
         ),
     ];
 

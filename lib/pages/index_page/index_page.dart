@@ -94,7 +94,7 @@ class _ExplorePageStateful extends StatefulWidget {
 class _ExplorePageState extends State<_ExplorePageStateful> {
   final ScrollController _scrollController = ScrollController();
   bool _isPrecaching = false;
-  bool _hasRunInitialPrecache = false;
+  // Keep skeleton until the first screen images are ready on every refresh.
 
   @override
   void initState() {
@@ -120,29 +120,23 @@ class _ExplorePageState extends State<_ExplorePageStateful> {
     return GetBuilder<IndexController>(
       id: 'post_list',
       builder: (_) {
-        // After data is fetched, pre-cache images once; show skeleton until done.
+        // After data is fetched, pre-cache first-screen images; keep skeleton until done.
         if (widget.controller.isInitialLoading &&
             widget.controller.isDataReady &&
             !_isPrecaching) {
           _isPrecaching = true;
-          // First load: pre-cache images; subsequent refresh: skip pre-cache.
-          if (_hasRunInitialPrecache) {
-            widget.controller.finalizeInitialLoad();
+          _precacheExploreImages(context).whenComplete(() {
+            if (!mounted) return;
             _isPrecaching = false;
-          } else {
-            _precacheExploreImages(context).whenComplete(() {
-              if (!mounted) return;
-              _hasRunInitialPrecache = true;
-              _isPrecaching = false;
-              widget.controller.finalizeInitialLoad();
-            });
-          }
+            widget.controller.finalizeInitialLoad();
+          });
         }
 
         return RefreshIndicator(
           onRefresh: widget.controller.refreshPosts, // pull to refresh
           child: CustomScrollView(
             controller: _scrollController,
+            physics: const AlwaysScrollableScrollPhysics(),
             slivers: [
               // Weather banner + selector
               SliverToBoxAdapter(

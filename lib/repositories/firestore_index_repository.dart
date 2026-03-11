@@ -7,35 +7,45 @@ class FirestoreIndexRepository {
 
   FirestoreIndexRepository({
     FirebaseFirestore? db,
-    this.collectionPath = 'index_cards',
+    // Home feed should show the real recipes users create.
+    this.collectionPath = 'recipes',
   }) : _db = db ?? FirebaseFirestore.instance;
 
   Future<List<CardData>> getAll() async {
-    final snapshot = await _db.collection(collectionPath).orderBy('id').get();
+    final snapshot =
+        await _db.collection(collectionPath).orderBy('createdAt', descending: true).get();
     return snapshot.docs.map((doc) {
       final data = doc.data();
-      return CardData.fromJson(_normalizeCardDataJson(data));
+      return CardData.fromJson(_normalizeCardDataJson(doc.id, data));
     }).toList(growable: false);
   }
 
-  Future<CardData?> getById(int id) async {
-    final doc = await _db.collection(collectionPath).doc(id.toString()).get();
+  Future<CardData?> getById(String id) async {
+    final doc = await _db.collection(collectionPath).doc(id).get();
     final data = doc.data();
     if (!doc.exists || data == null) return null;
-    return CardData.fromJson(_normalizeCardDataJson(data));
+    return CardData.fromJson(_normalizeCardDataJson(doc.id, data));
   }
 
-  Map<String, dynamic> _normalizeCardDataJson(Map<String, dynamic> json) {
-    int toInt(dynamic value) => (value as num).toInt();
+  Map<String, dynamic> _normalizeCardDataJson(String docId, Map<String, dynamic> json) {
+    int toInt(dynamic value) => (value as num?)?.toInt() ?? 0;
+
+    final author = (json['author'] as Map?)?.cast<String, dynamic>() ?? const <String, dynamic>{};
+    final images = (json['imageUrls'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? const <String>[];
+    final tags = (json['tags'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? const <String>[];
 
     return <String, dynamic>{
-      ...json,
-      'id': toInt(json['id']),
-      'uid': toInt(json['uid']),
-      'fav': toInt(json['fav']),
-      'like': toInt(json['like']),
-      'comment': toInt(json['comment'] ?? 0),
-      'tags': (json['tags'] as List<dynamic>).map((e) => e.toString()).toList(),
+      'id': docId,
+      'uid': (json['userId'] ?? json['authorUid'] ?? '').toString(),
+      'cover': images.isNotEmpty ? images.first : '',
+      'title': (json['title'] ?? '').toString(),
+      'content': (json['content'] ?? '').toString(),
+      'avatar': (author['avatar'] ?? '').toString(),
+      'nickname': (author['nickname'] ?? '').toString(),
+      'fav': toInt(json['favCount'] ?? json['fav']),
+      'like': toInt(json['likeCount'] ?? json['like']),
+      'comment': toInt(json['commentCount'] ?? json['comment']),
+      'tags': tags,
     };
   }
 }

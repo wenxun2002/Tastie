@@ -43,15 +43,15 @@ class CardItem extends StatelessWidget {
                   );
                 },
               ),
-              // Content Text
+              // Title
               Padding(
                 padding:
                     const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4),
                 child: Text(
-                  cardData.content,
+                  cardData.title,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 12),
+                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
                 ),
               ),
               // User Info and Like

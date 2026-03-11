@@ -3,6 +3,8 @@ import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:tastie/constants/color_plate.dart';
 import 'package:tastie/models/card_data.dart';
+import 'package:get/get.dart';
+import 'package:tastie/constants/pages.dart';
 import 'package:tastie/pages/index_page/widgets/card_item.dart';
 import 'package:tastie/pages/index_page/widgets/card_item_skeleton.dart';
 import 'package:tastie/pages/me_page/settings_screen.dart';
@@ -232,7 +234,7 @@ class _MePageState extends State<MePage> {
                 key: ValueKey(post.id),
                 cardData: post,
                 onTap: () {
-                  // TODO: navigate to detail or handle tap
+                  Get.toNamed(Pages.indexDetail, arguments: {"id": post.id});
                 },
               );
             },

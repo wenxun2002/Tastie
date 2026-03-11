@@ -123,7 +123,9 @@ class IndexDetailSkeleton extends StatelessWidget {
                       ],
                     ),
                   ),
-                  const Spacer(),
+                  // Use fixed space instead of Spacer - Spacer requires bounded height
+                  // (Column is inside SingleChildScrollView which has unbounded height)
+                  const SizedBox(height: 24),
                   SafeArea(
                     top: false,
                     child: Padding(

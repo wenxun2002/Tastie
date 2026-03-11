@@ -7,8 +7,10 @@ import 'package:tastie/constants/color_plate.dart';
 import 'package:tastie/constants/ingredient_units.dart';
 import 'package:tastie/models/create_post_data.dart';
 import 'package:tastie/models/tag_item.dart';
+import 'package:tastie/pages/home_page/home_controller.dart';
+import 'package:tastie/pages/index_page/index_controller.dart';
 import 'package:tastie/repositories/firestore_tag_repository.dart';
-import 'package:tastie/services/create_post_service.dart';
+import 'package:tastie/services/create_recipe_service.dart';
 import 'package:tastie/widgets/photo_upload_row.dart';
 import 'package:tastie/widgets/primary_button.dart';
 import 'package:tastie/widgets/smart_generate_button.dart';
@@ -38,6 +40,10 @@ class _CreatePostPageState extends State<CreatePostPage> {
   String? _tagError;
   List<XFile> _photos = const [];
   late final StepProgressController _stepProgressController;
+
+  bool _isSubmitting = false;
+  String? _submitProgress;
+  String? _submitError;
 
   CreatePostStep _currentStep = CreatePostStep.post;
   int _stepTransitionDirection = 1;
@@ -123,12 +129,36 @@ class _CreatePostPageState extends State<CreatePostPage> {
   void _handleNextPressed() {
     switch (_currentStep) {
       case CreatePostStep.post:
+        if (_titleController.text.trim().isEmpty) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text('Title is required')));
+          return;
+        }
         _goToStep(CreatePostStep.ingredients);
         break;
       case CreatePostStep.ingredients:
+        final hasEmptyIngredient = _ingredientEntries.any(
+          (e) => e.data.name.trim().isEmpty,
+        );
+        if (hasEmptyIngredient) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('All ingredients are required')),
+          );
+          return;
+        }
         _goToStep(CreatePostStep.procedures);
         break;
       case CreatePostStep.procedures:
+        final hasEmptyProcedure = _procedureEntries.any(
+          (e) => e.description.trim().isEmpty,
+        );
+        if (hasEmptyProcedure) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('All procedures are required')),
+          );
+          return;
+        }
         _submit();
         break;
     }
@@ -156,13 +186,66 @@ class _CreatePostPageState extends State<CreatePostPage> {
     _stepProgressController.setCurrentStep(step.index);
   }
 
-  void _submit() {
+  Future<void> _submit() async {
     final data = _buildCreatePostData();
-    // Simulate sending to backend by logging the complete payload.
-    CreatePostService.logCreatePostPayload(data);
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Submit coming soon')),
-    );
+    if (data.title.trim().isEmpty) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Please enter a title')));
+      return;
+    }
+    setState(() {
+      _isSubmitting = true;
+      _submitError = null;
+      _submitProgress = 'Preparing...';
+    });
+    try {
+      final service = CreateRecipeService();
+      await service.createRecipe(
+        data,
+        onProgress: (message) {
+          if (mounted) setState(() => _submitProgress = message);
+        },
+      );
+      if (!mounted) return;
+      setState(() {
+        _isSubmitting = false;
+        _submitProgress = null;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Recipe published successfully')),
+      );
+      // UX: navigate to Home immediately, then trigger refresh so user sees skeleton.
+      Get.back<void>();
+      Future.microtask(() async {
+        try {
+          // Ensure we are on Home tab.
+          final home = Get.find<HomeController>();
+          home.onChangePage(0);
+        } catch (_) {}
+        try {
+          final index = Get.find<IndexController>();
+          // Do not await in UI thread before navigation; this will show skeleton.
+          await index.refreshPosts();
+        } catch (_) {}
+      });
+    } catch (e, st) {
+      if (mounted) {
+        setState(() {
+          _isSubmitting = false;
+          _submitProgress = null;
+          _submitError = e is CreateRecipeException ? e.message : e.toString();
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to publish: ${_submitError ?? e}'),
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
+      // ignore: avoid_print
+      print('CreateRecipe error: $e\n$st');
+    }
   }
 
   CreatePostData _buildCreatePostData() {
@@ -294,77 +377,107 @@ class _CreatePostPageState extends State<CreatePostPage> {
     final theme = Theme.of(context);
     final bool isLastStep = _currentStep == CreatePostStep.procedures;
 
-    return Scaffold(
-      backgroundColor: Colors.white,
-      body: SafeArea(
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.arrow_back),
-                    onPressed: _handleBackPressed,
-                  ),
-                  PrimaryButton(
-                    text: isLastStep ? 'Submit' : 'Next',
-                    onPressed: _handleNextPressed,
-                  ),
-                ],
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: _StepProgressBar(
-                currentStep: _currentStep,
-                controller: _stepProgressController,
-              ),
-            ),
-            const SizedBox(height: 16),
-            Expanded(
-              child: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 350),
-                transitionBuilder: (child, animation) {
-                  final direction = _stepTransitionDirection;
-                  final offsetAnimation =
-                      Tween<Offset>(
-                        begin: Offset(0.1 * direction, 0),
-                        end: Offset.zero,
-                      ).animate(
-                        CurvedAnimation(
-                          parent: animation,
-                          curve: Curves.easeOutCubic,
-                        ),
-                      );
-                  return FadeTransition(
-                    opacity: animation,
-                    child: SlideTransition(
-                      position: offsetAnimation,
-                      child: child,
-                    ),
-                  );
-                },
-                layoutBuilder: (currentChild, previousChildren) {
-                  return Stack(
-                    alignment: Alignment.topCenter,
+    final overlay = _isSubmitting
+        ? Container(
+            color: Colors.black26,
+            child: Center(
+              child: Card(
+                margin: const EdgeInsets.symmetric(horizontal: 32),
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      ...previousChildren,
-                      if (currentChild != null) currentChild,
+                      const CircularProgressIndicator(),
+                      const SizedBox(height: 16),
+                      Text(
+                        _submitProgress ?? 'Please wait...',
+                        style: theme.textTheme.bodyMedium,
+                      ),
                     ],
-                  );
-                },
-                child: KeyedSubtree(
-                  key: ValueKey(_currentStep),
-                  child: _buildStepContent(theme),
+                  ),
                 ),
               ),
             ),
-          ],
+          )
+        : const SizedBox.shrink();
+
+    return Stack(
+      children: [
+        Scaffold(
+          backgroundColor: Colors.white,
+          body: SafeArea(
+            child: Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.arrow_back),
+                        onPressed: _handleBackPressed,
+                      ),
+                      PrimaryButton(
+                        text: isLastStep ? 'Submit' : 'Next',
+                        onPressed: _isSubmitting ? null : _handleNextPressed,
+                      ),
+                    ],
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: _StepProgressBar(
+                    currentStep: _currentStep,
+                    controller: _stepProgressController,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Expanded(
+                  child: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 350),
+                    transitionBuilder: (child, animation) {
+                      final direction = _stepTransitionDirection;
+                      final offsetAnimation =
+                          Tween<Offset>(
+                            begin: Offset(0.1 * direction, 0),
+                            end: Offset.zero,
+                          ).animate(
+                            CurvedAnimation(
+                              parent: animation,
+                              curve: Curves.easeOutCubic,
+                            ),
+                          );
+                      return FadeTransition(
+                        opacity: animation,
+                        child: SlideTransition(
+                          position: offsetAnimation,
+                          child: child,
+                        ),
+                      );
+                    },
+                    layoutBuilder: (currentChild, previousChildren) {
+                      return Stack(
+                        alignment: Alignment.topCenter,
+                        children: [
+                          ...previousChildren,
+                          if (currentChild != null) currentChild,
+                        ],
+                      );
+                    },
+                    child: KeyedSubtree(
+                      key: ValueKey(_currentStep),
+                      child: _buildStepContent(theme),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
-      ),
+        overlay,
+      ],
     );
   }
 
@@ -385,7 +498,11 @@ class _CreatePostPageState extends State<CreatePostPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          PhotoUploadRow(maxPhotos: _maxPhotos, onChanged: _handlePhotoChanged),
+          PhotoUploadRow(
+            maxPhotos: _maxPhotos,
+            initialPhotos: _photos,
+            onChanged: _handlePhotoChanged,
+          ),
           const SizedBox(height: 4),
           Align(
             alignment: Alignment.centerRight,
@@ -402,14 +519,14 @@ class _CreatePostPageState extends State<CreatePostPage> {
           TextField(
             controller: _titleController,
             maxLines: 1,
-            decoration: _underlineInputDecoration('Placeholder for Title'),
+            decoration: _underlineInputDecoration('Title (required)'),
           ),
           const SizedBox(height: 24),
           TextField(
             controller: _contentController,
             maxLines: 5,
             decoration: _underlineInputDecoration(
-              'Placeholder for Content',
+              'Description (optional)',
             ).copyWith(alignLabelWithHint: true),
           ),
           const SizedBox(height: 24),

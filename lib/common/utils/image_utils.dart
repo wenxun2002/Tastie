@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:fade_shimmer/fade_shimmer.dart';
 
 /// 图片加载工具类
 /// 自动判断是本地资源还是网络URL
@@ -38,17 +39,22 @@ class ImageUtils {
         },
         loadingBuilder: (context, child, loadingProgress) {
           if (loadingProgress == null) return child;
+          final double shimmerWidth = (width == null || width == double.infinity)
+              ? 80
+              : width;
+          final double shimmerHeight = (height == null || height == double.infinity)
+              ? 80
+              : height;
           return Container(
             width: width,
             height: height,
             color: Colors.grey[200],
-            child: Center(
-              child: CircularProgressIndicator(
-                value: loadingProgress.expectedTotalBytes != null
-                    ? loadingProgress.cumulativeBytesLoaded /
-                        loadingProgress.expectedTotalBytes!
-                    : null,
-              ),
+            child: FadeShimmer(
+              width: shimmerWidth,
+              height: shimmerHeight,
+              radius: 0,
+              fadeTheme: FadeTheme.light,
+              millisecondsDelay: 0,
             ),
           );
         },

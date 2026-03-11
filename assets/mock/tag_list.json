@@ -1,0 +1,9 @@
+[
+  { "id": 1, "label": "Comfort", "defaultEnabled": false },
+  { "id": 2, "label": "Cooling", "defaultEnabled": false },
+  { "id": 3, "label": "Hydrating", "defaultEnabled": false },
+  { "id": 4, "label": "Light", "defaultEnabled": false },
+  { "id": 5, "label": "Energy", "defaultEnabled": false },
+  { "id": 6, "label": "Warming", "defaultEnabled": false }
+]
+
