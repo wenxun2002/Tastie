@@ -6,5 +6,7 @@ class Pages {
   static const String mine = "/mine";
   static const String indexDetail = "/indexDetail";
   static const String login = "/login";
+  static const String reportReason = "/reportReason";
+  static const String reportSubmission = "/reportSubmission";
 }
 

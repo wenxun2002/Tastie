@@ -3,9 +3,11 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:tastie/constants/pages.dart';
 import 'package:tastie/models/recipe_firestore.dart';
 import 'package:tastie/models/comment.dart';
 import 'package:tastie/pages/auth/auth_controller.dart';
+import 'package:tastie/pages/report/report_reason_page.dart';
 import 'package:tastie/repositories/firestore_recipe_repository.dart';
 import 'package:tastie/services/recipe_storage_service.dart';
 import 'package:tastie/pages/index_page/index_controller.dart';
@@ -105,9 +107,27 @@ class IndexDetailController extends GetxController {
     return user.uid == recipe.userId;
   }
 
-  /// Report this recipe. Placeholder for future implementation.
+  /// True when report option should be shown: user is logged in and this is not their own recipe.
+  bool get canReport {
+    final auth = Get.find<AuthController>();
+    if (auth.currentUser.value == null) return false;
+    return !isOwnPost;
+  }
+
+  /// Navigate to report flow (reason selection page). Call only when [canReport] is true.
   void report() {
-    // TODO: implement report (e.g. open report dialog, call API).
+    if (!canReport) {
+      return;
+    }
+    Get.toNamed(
+      Pages.reportReason,
+      arguments: ReportReasonPage.getReportArguments(
+        recipeId: id,
+        recipeTitle: recipe.title,
+        authorUsername: recipe.authorNickname,
+        createdAt: recipe.createdAt,
+      ),
+    );
   }
 
   /// Delete own recipe. Placeholder for future implementation.

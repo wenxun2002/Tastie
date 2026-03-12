@@ -44,14 +44,15 @@ class _IndexDetailPageState extends State<IndexDetailPage>
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              ListTile(
-                leading: const Icon(Icons.flag_outlined, color: ColorPlate.textSecondary),
-                title: Text('Report', style: ColorPlate.bodyText),
-                onTap: () {
-                  Navigator.pop(sheetContext);
-                  controller.report();
-                },
-              ),
+              if (controller.canReport)
+                ListTile(
+                  leading: const Icon(Icons.flag_outlined, color: ColorPlate.textSecondary),
+                  title: Text('Report', style: ColorPlate.bodyText),
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    controller.report();
+                  },
+                ),
               ListTile(
                 leading: const Icon(Icons.share, color: ColorPlate.primary),
                 title: Text('Share', style: ColorPlate.bodyText),
