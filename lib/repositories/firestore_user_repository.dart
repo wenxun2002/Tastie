@@ -17,6 +17,10 @@ class FirestoreUserRepository {
   Future<void> upsertFromAuthUser(User user) async {
     final ref = _db.collection(collectionPath).doc(user.uid);
 
+    final existing = await ref.get();
+    final data = existing.data();
+    final hasCreatedAt = existing.exists && data != null && data['createdAt'] != null;
+
     final payload = <String, dynamic>{
       'uid': user.uid,
       'email': user.email,
@@ -24,9 +28,12 @@ class FirestoreUserRepository {
       'photoURL': user.photoURL,
       'providerIds': user.providerData.map((e) => e.providerId).toList(),
       'lastLoginAt': FieldValue.serverTimestamp(),
-      // Only set once on first create
-      'createdAt': FieldValue.serverTimestamp(),
     };
+
+    // Only set once on first create (or if missing).
+    if (!hasCreatedAt) {
+      payload['createdAt'] = FieldValue.serverTimestamp();
+    }
 
     await ref.set(
       payload,

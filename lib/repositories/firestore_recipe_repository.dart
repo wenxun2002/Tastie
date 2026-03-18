@@ -14,6 +14,10 @@ class FirestoreRecipeRepository {
   Future<String> create(RecipeFirestore recipe) async {
     final map = recipe.toFirestore();
     map['createdAt'] = FieldValue.serverTimestamp();
+    // Ensure new recipes follow the latest admin schema.
+    map.putIfAbsent('status', () => 'active');
+    // Optional compatibility: admin also reads these fields directly.
+    map.putIfAbsent('authorUid', () => recipe.userId);
 
     final ref = await _db.collection(_collection).add(map);
     return ref.id;
