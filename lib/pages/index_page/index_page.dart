@@ -172,11 +172,13 @@ class _ExplorePageState extends State<_ExplorePageStateful> {
                     return CardItem(
                       key: ValueKey(post.id),
                       cardData: post,
+                      isLiked: widget.controller.isRecipeLiked(post.id),
                       onTap: () async {
                         final result = await Get.toNamed(
                           Pages.indexDetail,
                           arguments: {"id": post.id},
                         );
+                        await widget.controller.reloadLikedRecipeIds();
                         if (!context.mounted) return;
                         if (result == true) {
                           ScaffoldMessenger.of(context).showSnackBar(

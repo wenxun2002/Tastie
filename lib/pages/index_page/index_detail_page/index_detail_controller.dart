@@ -1,5 +1,8 @@
-import 'package:flutter/material.dart';
+import 'dart:async';
+
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:share_plus/share_plus.dart';
@@ -9,6 +12,7 @@ import 'package:tastie/models/comment.dart';
 import 'package:tastie/pages/auth/auth_controller.dart';
 import 'package:tastie/pages/report/report_reason_page.dart';
 import 'package:tastie/repositories/firestore_recipe_repository.dart';
+import 'package:tastie/repositories/recipe_engagement_repository.dart';
 import 'package:tastie/services/recipe_storage_service.dart';
 import 'package:tastie/pages/index_page/index_controller.dart';
 
@@ -18,34 +22,95 @@ class IndexDetailController extends GetxController {
   bool isLoading = true;
   bool isFail = false;
   List<Comment> commentList = [];
-  
-  // 交互状态
+
+  /// From Firestore `users/{uid}/likes/{recipeId}`.
   bool isLiked = false;
+  /// From Firestore `users/{uid}/collections/{recipeId}`.
   bool isFavorited = false;
-  Map<int, bool> commentLikedMap = {}; // 评论点赞状态
+  Map<int, bool> commentLikedMap = {};
+
+  bool isLikeBusy = false;
+  bool isFavBusy = false;
+
+  final RecipeEngagementRepository _engagement = RecipeEngagementRepository();
+  StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _recipeSub;
+  StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _likeSub;
+  StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _collectionSub;
+  StreamSubscription<User?>? _authSub;
 
   @override
   void onInit() {
     super.onInit();
-    // 获取传递的参数
     final args = Get.arguments;
     final dynamic argId = (args is Map) ? args["id"] : null;
     if (argId is String && argId.trim().isNotEmpty) {
       id = argId;
     } else {
-      id = ''; // fallback
+      id = '';
     }
+    _authSub = FirebaseAuth.instance.authStateChanges().listen(_onAuthChanged);
     getIndexDetailData(id);
     getCommentList();
   }
 
+  void _onAuthChanged(User? user) {
+    if (id.isEmpty || isFail) {
+      isLiked = false;
+      isFavorited = false;
+      update();
+      return;
+    }
+    _bindUserEngagementStreams(user?.uid);
+  }
+
+  void _bindUserEngagementStreams(String? uid) {
+    _likeSub?.cancel();
+    _likeSub = null;
+    _collectionSub?.cancel();
+    _collectionSub = null;
+
+    if (uid == null || id.isEmpty) {
+      isLiked = false;
+      isFavorited = false;
+      update();
+      return;
+    }
+
+    _likeSub = _engagement.watchLike(uid, id).listen((snap) {
+      isLiked = snap.exists;
+      update();
+    });
+    _collectionSub = _engagement.watchCollection(uid, id).listen((snap) {
+      isFavorited = snap.exists;
+      update();
+    });
+  }
+
+  void _startRecipeStream() {
+    if (id.isEmpty) return;
+    _recipeSub?.cancel();
+    _recipeSub = _engagement.watchRecipe(id).listen((snap) {
+      if (!snap.exists || snap.data() == null) return;
+      recipe = RecipeFirestore.fromFirestore(snap.id, snap.data()!);
+      update();
+    });
+  }
+
+  @override
+  void onClose() {
+    _recipeSub?.cancel();
+    _likeSub?.cancel();
+    _collectionSub?.cancel();
+    _authSub?.cancel();
+    super.onClose();
+  }
+
   void getIndexDetailData(String id) async {
-    // 模拟网络请求延迟
     await Future.delayed(const Duration(milliseconds: 500));
     try {
       final repository = FirestoreRecipeRepository();
       final found = await repository.getById(id);
-      
+
       if (found != null) {
         recipe = found;
         isFail = false;
@@ -56,17 +121,21 @@ class IndexDetailController extends GetxController {
       isFail = true;
     } finally {
       isLoading = false;
+      if (!isFail && id.isNotEmpty) {
+        _startRecipeStream();
+        _bindUserEngagementStreams(FirebaseAuth.instance.currentUser?.uid);
+      } else {
+        _recipeSub?.cancel();
+        _recipeSub = null;
+        _bindUserEngagementStreams(null);
+      }
       update();
     }
   }
 
   void getCommentList() {
-    // COMMENT FEATURE DISABLED — RESERVED FOR FUTURE USE
-    // 模拟网络请求延迟
     Future.delayed(const Duration(milliseconds: 300), () {
-      // Comment list is empty as feature is disabled
       commentList = [];
-      // 初始化评论点赞状态
       for (var comment in commentList) {
         commentLikedMap[comment.id] = comment.isLike;
       }
@@ -74,32 +143,70 @@ class IndexDetailController extends GetxController {
     });
   }
 
-  // 切换点赞状态
-  void toggleLike() {
-    isLiked = !isLiked;
+  Future<void> toggleLike() async {
+    final User? user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      Get.snackbar(
+        'Sign in required',
+        'Log in to like recipes.',
+        snackPosition: SnackPosition.BOTTOM,
+      );
+      return;
+    }
+    if (isLikeBusy || id.isEmpty || isFail) return;
+    isLikeBusy = true;
     update();
+    try {
+      await _engagement.toggleLike(userId: user.uid, recipeId: id);
+    } catch (e) {
+      Get.snackbar(
+        'Like failed',
+        e.toString(),
+        snackPosition: SnackPosition.BOTTOM,
+      );
+    } finally {
+      isLikeBusy = false;
+      update();
+    }
   }
 
-  // 切换收藏状态
-  void toggleFavorite() {
-    isFavorited = !isFavorited;
+  Future<void> toggleFavorite() async {
+    final User? user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      Get.snackbar(
+        'Sign in required',
+        'Log in to save recipes.',
+        snackPosition: SnackPosition.BOTTOM,
+      );
+      return;
+    }
+    if (isFavBusy || id.isEmpty || isFail) return;
+    isFavBusy = true;
     update();
+    try {
+      await _engagement.toggleFavorite(userId: user.uid, recipeId: id);
+    } catch (e) {
+      Get.snackbar(
+        'Save failed',
+        e.toString(),
+        snackPosition: SnackPosition.BOTTOM,
+      );
+    } finally {
+      isFavBusy = false;
+      update();
+    }
   }
 
-  // 切换评论点赞状态
   void toggleCommentLike(int commentId) {
     commentLikedMap[commentId] = !(commentLikedMap[commentId] ?? false);
     update();
   }
 
-  // 分享功能
   Future<void> share() {
     final shareText = buildShareText(recipe);
     return onShareText(shareText);
   }
 
-  /// Whether the current user is the author of this recipe (for showing Delete option).
-  /// Requires card to have [CardDetailData.authorUid] set (e.g. from Firestore when creating post).
   bool get isOwnPost {
     final auth = Get.find<AuthController>();
     final User? user = auth.currentUser.value;
@@ -107,14 +214,12 @@ class IndexDetailController extends GetxController {
     return user.uid == recipe.userId;
   }
 
-  /// True when report option should be shown: user is logged in and this is not their own recipe.
   bool get canReport {
     final auth = Get.find<AuthController>();
     if (auth.currentUser.value == null) return false;
     return !isOwnPost;
   }
 
-  /// Navigate to report flow (reason selection page). Call only when [canReport] is true.
   void report() {
     if (!canReport) {
       return;
@@ -130,8 +235,6 @@ class IndexDetailController extends GetxController {
     );
   }
 
-  /// Delete own recipe. Placeholder for future implementation.
-  /// Deletes recipe and pops the detail page with result=true when success.
   Future<void> deleteRecipe(BuildContext context) async {
     if (!isOwnPost) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -167,17 +270,14 @@ class IndexDetailController extends GetxController {
     try {
       await FirestoreRecipeRepository().delete(id);
 
-      // Best-effort: delete images in Storage (ignore failure)
       try {
         await RecipeStorageService().deleteByUrls(recipe.imageUrls);
       } catch (_) {}
 
       if (context.mounted) {
-        // Close detail page and let previous page show feedback.
         Navigator.pop(context, true);
       }
 
-      // Refresh home feed if it's alive in memory.
       try {
         final index = Get.find<IndexController>();
         await index.refreshPosts();
@@ -192,57 +292,36 @@ class IndexDetailController extends GetxController {
   }
 }
 
-/// Build formatted shareable text from recipe detail
 String buildShareText(RecipeFirestore recipe) {
   final buffer = StringBuffer();
 
-  // Title
   buffer.writeln(recipe.title);
   buffer.writeln();
 
-  // Ingredients
-  buffer.writeln("Ingredients:");
+  buffer.writeln('Ingredients:');
   for (final ingredient in recipe.ingredients) {
     final name = (ingredient['name'] ?? '').toString();
     final amount = ingredient['amount'];
     final unit = (ingredient['unit'] ?? '').toString();
     if (amount == null || (amount is num && amount == 0)) {
-      buffer.writeln("$name - $unit");
+      buffer.writeln('$name - $unit');
     } else {
-      buffer.writeln("$name - $amount$unit");
+      buffer.writeln('$name - $amount$unit');
     }
   }
   buffer.writeln();
 
-  // Procedures
-  buffer.writeln("Procedures:");
+  buffer.writeln('Procedures:');
   for (int i = 0; i < recipe.procedures.length; i++) {
-    // Auto-number each step, remove any existing numbers
     String step = recipe.procedures[i];
-    // Remove leading numbers and dots if present
     step = step.replaceFirst(RegExp(r'^\d+\.?\s*'), '');
-    buffer.writeln("${i + 1}. $step");
+    buffer.writeln('${i + 1}. $step');
   }
 
   return buffer.toString();
 }
 
-/// Share text: opens share sheet and copies to clipboard
 Future<void> onShareText(String shareText) async {
   await SharePlus.instance.share(ShareParams(text: shareText));
   Clipboard.setData(ClipboardData(text: shareText));
-}
-
-/// Format count for display
-/// 0-9999: full number
-/// >=10000: "X.Xw" format (one decimal, no trailing zeros)
-String formatCount(int count) {
-  if (count < 10000) {
-    return count.toString();
-  }
-  
-  final double thousands = count / 1000.0;
-  // Round to 1 decimal place and remove trailing zeros
-  final String formatted = thousands.toStringAsFixed(1);
-  return formatted.replaceAll(RegExp(r'\.?0+$'), '') + 'w';
 }

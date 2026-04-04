@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:tastie/models/recipe_firestore.dart';
 
@@ -55,6 +57,25 @@ class FirestoreRecipeRepository {
     final doc = await _db.collection(_collection).doc(id).get();
     if (!doc.exists || doc.data() == null) return null;
     return RecipeFirestore.fromFirestore(doc.id, doc.data()!);
+  }
+
+  /// Fetches many recipes by document id, preserving [ids] order (skips missing).
+  Future<List<RecipeFirestore>> getByIdsInOrder(List<String> ids) async {
+    if (ids.isEmpty) return [];
+    const chunkSize = 30;
+    final byId = <String, RecipeFirestore>{};
+    for (var i = 0; i < ids.length; i += chunkSize) {
+      final end = min(i + chunkSize, ids.length);
+      final chunk = ids.sublist(i, end);
+      final snap = await _db
+          .collection(_collection)
+          .where(FieldPath.documentId, whereIn: chunk)
+          .get();
+      for (final doc in snap.docs) {
+        byId[doc.id] = RecipeFirestore.fromFirestore(doc.id, doc.data());
+      }
+    }
+    return ids.map((id) => byId[id]).whereType<RecipeFirestore>().toList();
   }
 
   /// Deletes a recipe document by ID.

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:tastie/common/utils/image_utils.dart';
 import 'package:tastie/constants/color_plate.dart';
+import 'package:tastie/common/utils/count_format.dart';
 import 'package:tastie/pages/index_page/index_detail_page/index_detail_controller.dart';
 import 'package:tastie/pages/index_page/index_detail_page/index_detail_skeleton.dart';
 
@@ -492,7 +493,7 @@ class _IndexDetailPageState extends State<IndexDetailPage>
             ),
             const SizedBox(width: 6),
             Text(
-              formatCount(count),
+              formatEngagementCount(count),
               style: ColorPlate.bodyTextSmall.copyWith(
                 fontWeight: FontWeight.w500,
               ),
@@ -519,7 +520,7 @@ class _IndexDetailPageState extends State<IndexDetailPage>
             ),
             const SizedBox(width: 6),
             Text(
-              formatCount(count),
+              formatEngagementCount(count),
               style: ColorPlate.bodyTextSmall.copyWith(
                 fontWeight: FontWeight.w500,
               ),

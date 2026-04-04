@@ -1,8 +1,10 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:tastie/constants/pages.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:tastie/models/card_data.dart';
+import 'package:tastie/repositories/recipe_engagement_repository.dart';
 import 'package:tastie/models/weather_data.dart';
 import 'package:tastie/mock/mock_weather.dart';
 import 'package:tastie/repositories/weather_repository.dart';
@@ -26,6 +28,10 @@ class IndexController extends GetxController
 
   /// 下拉选择器中当前展示的“分类天气”（始终是几个 MockWeather 之一）
   WeatherData selectorWeather = MockWeather.weatherNeutral;
+
+  final RecipeEngagementRepository _engagementRepo = RecipeEngagementRepository();
+  /// Cached `users/{uid}/likes/*` doc ids (cap 500) for feed heart state.
+  Set<String> likedRecipeIds = {};
 
   @override
   void onInit() {
@@ -52,16 +58,35 @@ class IndexController extends GetxController
     try {
       final repository = FirestoreIndexRepository();
       _allData = await repository.getAll();
+      await _loadLikedRecipeIds();
       _sortData();
       isDataReady = true;
       update(['post_list']);
     } catch (e) {
       // Fallback: empty list if loading fails
       _allData = [];
+      await _loadLikedRecipeIds();
       _sortData();
       isDataReady = true;
       update(['post_list']);
     }
+  }
+
+  Future<void> _loadLikedRecipeIds() async {
+    likedRecipeIds = {};
+    try {
+      final String? uid = FirebaseAuth.instance.currentUser?.uid;
+      if (uid != null) {
+        likedRecipeIds = await _engagementRepo.getLikedRecipeIds(uid);
+      }
+    } catch (_) {}
+  }
+
+  bool isRecipeLiked(String recipeId) => likedRecipeIds.contains(recipeId);
+
+  Future<void> reloadLikedRecipeIds() async {
+    await _loadLikedRecipeIds();
+    update(['post_list']);
   }
 
   void finalizeInitialLoad() {
@@ -178,6 +203,7 @@ class IndexController extends GetxController
     try {
       final repository = FirestoreIndexRepository();
       _allData = await repository.getAll();
+      await _loadLikedRecipeIds();
       _sortData();
       isDataReady = true;
       update(['post_list']);
@@ -187,6 +213,7 @@ class IndexController extends GetxController
     } catch (e) {
       // Fallback: empty list if loading fails
       _allData = [];
+      await _loadLikedRecipeIds();
       _sortData();
       isDataReady = true;
       update(['post_list']);

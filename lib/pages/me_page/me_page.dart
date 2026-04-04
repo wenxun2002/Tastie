@@ -8,8 +8,8 @@ import 'package:tastie/constants/pages.dart';
 import 'package:tastie/pages/index_page/widgets/card_item.dart';
 import 'package:tastie/pages/index_page/widgets/card_item_skeleton.dart';
 import 'package:tastie/pages/me_page/settings_screen.dart';
-import 'package:tastie/repositories/firestore_index_repository.dart';
 import 'package:tastie/repositories/firestore_recipe_repository.dart';
+import 'package:tastie/repositories/recipe_engagement_repository.dart';
 import 'package:tastie/models/recipe_firestore.dart';
 
 class MePage extends StatefulWidget {
@@ -20,13 +20,7 @@ class MePage extends StatefulWidget {
 }
 
 class _MePageState extends State<MePage> {
-  late final Future<List<CardData>> _allCardsFuture;
-
-  @override
-  void initState() {
-    super.initState();
-    _allCardsFuture = FirestoreIndexRepository().getAll();
-  }
+  final RecipeEngagementRepository _engagement = RecipeEngagementRepository();
 
   CardData _cardFromRecipe(RecipeFirestore r) {
     return CardData(
@@ -77,23 +71,85 @@ class _MePageState extends State<MePage> {
                             ),
                           );
                         }
+                        return StreamBuilder<Set<String>>(
+                          stream: _engagement.watchLikedRecipeIdSet(user.uid),
+                          builder: (context, likedSnap) {
+                            final likedIds = likedSnap.data ?? {};
+                            return StreamBuilder<List<RecipeFirestore>>(
+                              stream: FirestoreRecipeRepository()
+                                  .watchByUserId(user.uid),
+                              builder: (context, snapshot) {
+                                if (snapshot.connectionState ==
+                                    ConnectionState.waiting) {
+                                  return _buildSkeletonGrid(context);
+                                }
+                                if (snapshot.hasError) {
+                                  // ignore: avoid_print
+                                  print(
+                                    'MyRecipe stream error: ${snapshot.error}',
+                                  );
+                                  final msg = snapshot.error.toString();
+                                  return Center(
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 20,
+                                      ),
+                                      child: Text(
+                                        'Failed to load My Recipe\n\n$msg',
+                                        textAlign: TextAlign.center,
+                                        style: const TextStyle(
+                                          color: ColorPlate.textTertiary,
+                                          fontSize: 13,
+                                        ),
+                                      ),
+                                    ),
+                                  );
+                                }
+                                final recipes =
+                                    snapshot.data ?? const <RecipeFirestore>[];
+                                final myData =
+                                    recipes.map(_cardFromRecipe).toList();
+                                return _buildRecipeGrid(
+                                  context,
+                                  myData,
+                                  forceLiked: false,
+                                  likedIds: likedIds,
+                                );
+                              },
+                            );
+                          },
+                        );
+                      },
+                    ),
+                    Builder(
+                      builder: (context) {
+                        final user = FirebaseAuth.instance.currentUser;
+                        if (user == null) {
+                          return const Center(
+                            child: Text(
+                              'Please sign in to see liked recipes',
+                              style: TextStyle(
+                                color: ColorPlate.textTertiary,
+                                fontSize: 14,
+                              ),
+                            ),
+                          );
+                        }
                         return StreamBuilder<List<RecipeFirestore>>(
-                          stream: FirestoreRecipeRepository()
-                              .watchByUserId(user.uid),
+                          stream: _engagement.watchLikedRecipes(user.uid),
                           builder: (context, snapshot) {
                             if (snapshot.connectionState ==
                                 ConnectionState.waiting) {
                               return _buildSkeletonGrid(context);
                             }
                             if (snapshot.hasError) {
-                              // ignore: avoid_print
-                              print('MyRecipe stream error: ${snapshot.error}');
-                              final msg = snapshot.error.toString();
                               return Center(
                                 child: Padding(
-                                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 20,
+                                  ),
                                   child: Text(
-                                    'Failed to load My Recipe\n\n$msg',
+                                    'Failed to load likes\n${snapshot.error}',
                                     textAlign: TextAlign.center,
                                     style: const TextStyle(
                                       color: ColorPlate.textTertiary,
@@ -105,24 +161,25 @@ class _MePageState extends State<MePage> {
                             }
                             final recipes =
                                 snapshot.data ?? const <RecipeFirestore>[];
-                            final myData =
+                            final cards =
                                 recipes.map(_cardFromRecipe).toList();
-                            return _buildRecipeGrid(context, myData);
+                            return _buildRecipeGrid(
+                              context,
+                              cards,
+                              forceLiked: true,
+                              emptyMessage: 'No liked recipes yet',
+                            );
                           },
                         );
                       },
                     ),
-                    FutureBuilder<List<CardData>>(
-                      future: _allCardsFuture,
-                      builder: (context, snapshot) {
-                        if (snapshot.connectionState ==
-                            ConnectionState.waiting) {
-                          return _buildSkeletonGrid(context);
-                        }
-                        if (snapshot.hasError) {
+                    Builder(
+                      builder: (context) {
+                        final user = FirebaseAuth.instance.currentUser;
+                        if (user == null) {
                           return const Center(
                             child: Text(
-                              'Failed to load Like',
+                              'Please sign in to see saved recipes',
                               style: TextStyle(
                                 color: ColorPlate.textTertiary,
                                 fontSize: 14,
@@ -130,34 +187,51 @@ class _MePageState extends State<MePage> {
                             ),
                           );
                         }
-                        final data = snapshot.data ?? <CardData>[];
-                        final like = List<CardData>.from(data)
-                          ..sort((a, b) => b.like.compareTo(a.like));
-                        return _buildRecipeGrid(context, like);
-                      },
-                    ),
-                    FutureBuilder<List<CardData>>(
-                      future: _allCardsFuture,
-                      builder: (context, snapshot) {
-                        if (snapshot.connectionState ==
-                            ConnectionState.waiting) {
-                          return _buildSkeletonGrid(context);
-                        }
-                        if (snapshot.hasError) {
-                          return const Center(
-                            child: Text(
-                              'Failed to load Collection',
-                              style: TextStyle(
-                                color: ColorPlate.textTertiary,
-                                fontSize: 14,
+                        return StreamBuilder<Set<String>>(
+                          stream: _engagement.watchLikedRecipeIdSet(user.uid),
+                          builder: (context, likedSnap) {
+                            final likedIds = likedSnap.data ?? {};
+                            return StreamBuilder<List<RecipeFirestore>>(
+                              stream: _engagement.watchCollectedRecipes(
+                                user.uid,
                               ),
-                            ),
-                          );
-                        }
-                        final data = snapshot.data ?? <CardData>[];
-                        final collection = List<CardData>.from(data)
-                          ..sort((a, b) => b.fav.compareTo(a.fav));
-                        return _buildRecipeGrid(context, collection);
+                              builder: (context, snapshot) {
+                                if (snapshot.connectionState ==
+                                    ConnectionState.waiting) {
+                                  return _buildSkeletonGrid(context);
+                                }
+                                if (snapshot.hasError) {
+                                  return Center(
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 20,
+                                      ),
+                                      child: Text(
+                                        'Failed to load collection\n${snapshot.error}',
+                                        textAlign: TextAlign.center,
+                                        style: const TextStyle(
+                                          color: ColorPlate.textTertiary,
+                                          fontSize: 13,
+                                        ),
+                                      ),
+                                    ),
+                                  );
+                                }
+                                final recipes =
+                                    snapshot.data ?? const <RecipeFirestore>[];
+                                final cards =
+                                    recipes.map(_cardFromRecipe).toList();
+                                return _buildRecipeGrid(
+                                  context,
+                                  cards,
+                                  forceLiked: false,
+                                  likedIds: likedIds,
+                                  emptyMessage: 'No saved recipes yet',
+                                );
+                              },
+                            );
+                          },
+                        );
                       },
                     ),
                   ],
@@ -293,12 +367,21 @@ class _MePageState extends State<MePage> {
   }
 
   /// Reuses same grid structure as Index Explore: SliverMasonryGrid + CardItem
-  Widget _buildRecipeGrid(BuildContext context, List<CardData> data) {
+  Widget _buildRecipeGrid(
+    BuildContext context,
+    List<CardData> data, {
+    bool forceLiked = false,
+    Set<String> likedIds = const {},
+    String emptyMessage = 'No recipes yet',
+  }) {
     if (data.isEmpty) {
-      return const Center(
+      return Center(
         child: Text(
-          "No recipes yet",
-          style: TextStyle(color: ColorPlate.textTertiary, fontSize: 14),
+          emptyMessage,
+          style: const TextStyle(
+            color: ColorPlate.textTertiary,
+            fontSize: 14,
+          ),
         ),
       );
     }
@@ -315,6 +398,7 @@ class _MePageState extends State<MePage> {
               return CardItem(
                 key: ValueKey(post.id),
                 cardData: post,
+                isLiked: forceLiked || likedIds.contains(post.id),
                 onTap: () async {
                   final result = await Get.toNamed(
                     Pages.indexDetail,

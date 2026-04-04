@@ -1,1 +1,25 @@
-{"flutter":{"platforms":{"android":{"default":{"projectId":"tastie-0314x","appId":"1:818788180650:android:7695a78b65e1661377e6d3","fileOutput":"android/app/google-services.json"}},"dart":{"lib/firebase_options.dart":{"projectId":"tastie-0314x","configurations":{"android":"1:818788180650:android:7695a78b65e1661377e6d3","web":"1:818788180650:web:a2fabd78bcb7035c77e6d3"}}}}}}
+{
+  "firestore": {
+    "rules": "firestore.rules"
+  },
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "tastie-0314x",
+          "appId": "1:818788180650:android:7695a78b65e1661377e6d3",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "tastie-0314x",
+          "configurations": {
+            "android": "1:818788180650:android:7695a78b65e1661377e6d3",
+            "web": "1:818788180650:web:a2fabd78bcb7035c77e6d3"
+          }
+        }
+      }
+    }
+  }
+}
