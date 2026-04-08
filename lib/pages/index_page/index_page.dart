@@ -7,6 +7,7 @@ import 'package:tastie/pages/index_page/widgets/card_item.dart';
 import 'package:tastie/pages/index_page/widgets/card_item_skeleton.dart';
 import 'package:tastie/pages/index_page/widgets/weather_banner.dart';
 import 'package:tastie/pages/index_page/widgets/weather_selector.dart';
+import 'package:tastie/pages/Search_Page/search_page.dart';
 import 'index_controller.dart';
 
 class IndexPage extends StatelessWidget {
@@ -48,7 +49,12 @@ class IndexPage extends StatelessWidget {
                       ],
                     ),
                   ),
-                  const Icon(Icons.search, size: 30, color: Colors.black),
+                  IconButton(
+                    icon: const Icon(Icons.search, size: 30, color: Colors.black),
+                    onPressed: () {
+                      Get.to(() => const SearchPage());
+                    },
+                  ),
                 ],
               ),
             ),

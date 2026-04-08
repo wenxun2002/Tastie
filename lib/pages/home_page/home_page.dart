@@ -8,6 +8,7 @@ import 'package:tastie/pages/create_post_page.dart';
 import 'package:tastie/pages/index_page/index_page.dart';
 import 'package:tastie/pages/me_page/me_page.dart';
 
+
 class HomePage extends StatelessWidget {
   HomePage({super.key});
   final HomeController homeController = Get.put(HomeController());

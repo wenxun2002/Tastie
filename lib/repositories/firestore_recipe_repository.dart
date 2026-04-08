@@ -59,6 +59,15 @@ class FirestoreRecipeRepository {
     return RecipeFirestore.fromFirestore(doc.id, doc.data()!);
   }
 
+  /// Lists all recipes, newest first.
+  Future<List<RecipeFirestore>> getAll() async {
+    final snapshot =
+        await _db.collection(_collection).orderBy('createdAt', descending: true).get();
+    return snapshot.docs
+        .map((doc) => RecipeFirestore.fromFirestore(doc.id, doc.data()))
+        .toList(growable: false);
+  }
+
   /// Fetches many recipes by document id, preserving [ids] order (skips missing).
   Future<List<RecipeFirestore>> getByIdsInOrder(List<String> ids) async {
     if (ids.isEmpty) return [];
