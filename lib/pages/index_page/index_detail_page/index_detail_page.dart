@@ -1,7 +1,9 @@
 import 'package:card_swiper/card_swiper.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:intl/intl.dart';
 import 'package:tastie/common/utils/image_utils.dart';
 import 'package:tastie/constants/color_plate.dart';
 import 'package:tastie/common/utils/count_format.dart';
@@ -18,6 +20,31 @@ class IndexDetailPage extends StatefulWidget {
 class _IndexDetailPageState extends State<IndexDetailPage>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
+
+  String _formatPostedTime(dynamic createdAt) {
+    if (createdAt == null) return '—';
+    DateTime? dateTime;
+    if (createdAt is Timestamp) {
+      dateTime = createdAt.toDate();
+    } else if (createdAt is DateTime) {
+      dateTime = createdAt;
+    } else if (createdAt is int) {
+      dateTime = DateTime.fromMillisecondsSinceEpoch(createdAt);
+    } else {
+      try {
+        final dynamic candidateToDate = createdAt;
+        final dynamic converted = candidateToDate.toDate();
+        if (converted is DateTime) {
+          dateTime = converted;
+        }
+      } catch (_) {
+        // Ignore unsupported createdAt formats.
+      }
+    }
+
+    if (dateTime == null) return '—';
+    return DateFormat.yMMMd().add_Hm().format(dateTime.toLocal());
+  }
 
   @override
   void initState() {
@@ -260,8 +287,11 @@ class _IndexDetailPageState extends State<IndexDetailPage>
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 8.0),
             child: Text(
-              "",
-              style: ColorPlate.caption,
+              "${_formatPostedTime(controller.recipe.createdAt)}",
+              style: ColorPlate.caption.copyWith(
+                color: ColorPlate.textSecondary,
+                fontSize: 11,
+              ),
             ),
           ),
         ],
