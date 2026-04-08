@@ -11,7 +11,12 @@
     "sync-auth-users:dry-run": "node sync_auth_users_to_firestore.js --dry-run"
   },
   "dependencies": {
-    "firebase-admin": "^13.0.2"
-  }
+    "firebase-admin": "^13.7.0"
+  },
+  "version": "1.0.0",
+  "description": "This script imports the existing mock JSON files into **Cloud Firestore**:",
+  "main": "index.js",
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
 }
-

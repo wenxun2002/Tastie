@@ -46,4 +46,5 @@ app.*.map.json
 /scripts/firestore_import/serviceAccountKey.json
 
 scripts/firestore_import/node_modules/
+scripts/firestore_import
 node_modules/
