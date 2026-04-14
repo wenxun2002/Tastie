@@ -5,11 +5,13 @@ import 'package:image_picker/image_picker.dart';
 import 'package:step_progress/step_progress.dart';
 import 'package:tastie/constants/color_plate.dart';
 import 'package:tastie/constants/ingredient_units.dart';
+import 'package:tastie/mock/mock_recipe_data.dart';
 import 'package:tastie/models/create_post_data.dart';
 import 'package:tastie/models/tag_item.dart';
 import 'package:tastie/pages/home_page/home_controller.dart';
 import 'package:tastie/pages/index_page/index_controller.dart';
 import 'package:tastie/repositories/firestore_tag_repository.dart';
+import 'package:tastie/services/ai_recipe_json_validator.dart';
 import 'package:tastie/services/create_recipe_service.dart';
 import 'package:tastie/widgets/photo_upload_row.dart';
 import 'package:tastie/widgets/primary_button.dart';
@@ -123,6 +125,76 @@ class _CreatePostPageState extends State<CreatePostPage> {
 
   void _handleSmartGenerate() {
     // TODO: integrate smart generate flow.
+    _goToStep(CreatePostStep.ingredients);
+  }
+
+  void _handleTestSmartGenerate() {
+    final validation = AiRecipeJsonValidator.validate(mockSmartGeneratedRecipeJson);
+    if (!validation.isValid) {
+      final firstError = validation.errors.isNotEmpty
+          ? validation.errors.first
+          : 'Invalid AI JSON format';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('AI JSON invalid: $firstError')),
+      );
+      return;
+    }
+
+    final mockData = CreatePostData.fromJson(mockSmartGeneratedRecipeJson);
+    _applyGeneratedData(mockData);
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          'Mock ingredients, nutrition, and procedures loaded',
+        ),
+      ),
+    );
+  }
+
+  void _applyGeneratedData(CreatePostData data) {
+    setState(() {
+      _nutrition = data.nutrition;
+
+      _ingredientEntries = data.ingredients
+          .map(
+            (ingredient) {
+              final normalizedUnit = _unitOptions.contains(ingredient.unit)
+                  ? ingredient.unit
+                  : _unitOptions.first;
+              final isSpecial = _specialUnits.contains(normalizedUnit);
+              return _IngredientEntry(
+              id: _nextIngredientId(),
+              data: ingredient.copyWith(
+                  unit: normalizedUnit,
+                  amount: isSpecial ? 0 : ingredient.amount,
+              ),
+            );
+            },
+          )
+          .toList(growable: false);
+      if (_ingredientEntries.isEmpty) {
+        _ingredientEntries = [
+          _IngredientEntry(
+            id: _nextIngredientId(),
+            data: IngredientData(unit: _unitOptions.first),
+          ),
+        ];
+      }
+
+      _procedureEntries = data.procedures
+          .map(
+            (step) => _ProcedureEntry(
+              id: _nextProcedureId(),
+              description: step,
+            ),
+          )
+          .toList(growable: false);
+      if (_procedureEntries.isEmpty) {
+        _procedureEntries = [
+          _ProcedureEntry(id: _nextProcedureId(), description: ''),
+        ];
+      }
+    });
     _goToStep(CreatePostStep.ingredients);
   }
 
@@ -548,6 +620,11 @@ class _CreatePostPageState extends State<CreatePostPage> {
           _buildTagSection(theme),
           const SizedBox(height: 16),
           SmartGenerateButton(onTap: _handleSmartGenerate),
+          const SizedBox(height: 8),
+          OutlinedButton(
+            onPressed: _handleTestSmartGenerate,
+            child: const Text('Test Smart Generate'),
+          ),
         ],
       ),
     );
@@ -727,7 +804,9 @@ class _CreatePostPageState extends State<CreatePostPage> {
                   SizedBox(
                     width: 80,
                     child: TextFormField(
-                      key: ValueKey(item.fieldKey),
+                      key: ValueKey(
+                        '${item.fieldKey}-${_valueForField(item.fieldKey)}',
+                      ),
                       initialValue: _valueForField(item.fieldKey) == 0
                           ? ''
                           : _valueForField(item.fieldKey).toString(),

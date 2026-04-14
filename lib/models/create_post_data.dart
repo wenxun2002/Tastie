@@ -1,3 +1,5 @@
+import 'package:tastie/constants/ingredient_units.dart';
+
 class CreatePostData {
   CreatePostData({
     this.photos = const [],
@@ -36,6 +38,33 @@ class CreatePostData {
       procedures: procedures ?? this.procedures,
     );
   }
+
+  factory CreatePostData.fromJson(Map<String, dynamic> json) {
+    final ingredientsRaw = (json['ingredients'] as List<dynamic>? ?? const []);
+    final proceduresRaw = (json['procedures'] as List<dynamic>? ?? const []);
+    final tagsRaw = (json['tags'] as List<dynamic>? ?? const []);
+    final nutritionRaw =
+        json['nutrition'] as Map<String, dynamic>? ?? const <String, dynamic>{};
+
+    return CreatePostData(
+      title: (json['title'] ?? '').toString(),
+      content: (json['content'] ?? '').toString(),
+      tags: tagsRaw.map((item) => item.toString()).toList(growable: false),
+      ingredients: ingredientsRaw
+          .map(
+            (item) => IngredientData.fromJson(
+              Map<String, dynamic>.from(item as Map),
+            ),
+          )
+          .toList(growable: false),
+      nutrition: NutritionData.fromJson(
+        Map<String, dynamic>.from(nutritionRaw),
+      ),
+      procedures: proceduresRaw
+          .map((item) => item.toString())
+          .toList(growable: false),
+    );
+  }
 }
 
 class IngredientData {
@@ -58,6 +87,20 @@ class IngredientData {
       name: name ?? this.name,
       amount: amount ?? this.amount,
       unit: unit ?? this.unit,
+    );
+  }
+
+  factory IngredientData.fromJson(Map<String, dynamic> json) {
+    final unitValue = (json['unit'] ?? 'g').toString();
+    final isSpecialUnit = IngredientUnits.specialUnits.contains(unitValue);
+    final amountRaw = json['amount'];
+    final amountValue = amountRaw is num
+        ? amountRaw.toDouble()
+        : double.tryParse(amountRaw?.toString() ?? '') ?? 0;
+    return IngredientData(
+      name: (json['name'] ?? '').toString(),
+      amount: isSpecialUnit ? 0 : amountValue,
+      unit: unitValue,
     );
   }
 }
@@ -93,6 +136,20 @@ class NutritionData {
       protein: protein ?? this.protein,
       carbs: carbs ?? this.carbs,
       fat: fat ?? this.fat,
+    );
+  }
+
+  factory NutritionData.fromJson(Map<String, dynamic> json) {
+    double parseNum(dynamic value) {
+      if (value is num) return value.toDouble();
+      return double.tryParse(value?.toString() ?? '') ?? 0;
+    }
+
+    return NutritionData(
+      calories: parseNum(json['calories']),
+      protein: parseNum(json['protein']),
+      carbs: parseNum(json['carbs']),
+      fat: parseNum(json['fat']),
     );
   }
 }

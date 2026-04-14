@@ -14,7 +14,7 @@ class FirestoreRecipeRepository {
   /// Creates a new recipe document. Sets createdAt to server timestamp.
   /// Returns the new document ID.
   Future<String> create(RecipeFirestore recipe) async {
-    final map = recipe.toFirestore();
+    final map = recipe.toJson();
     map['createdAt'] = FieldValue.serverTimestamp();
     // Ensure new recipes follow the latest admin schema.
     map.putIfAbsent('status', () => 'active');

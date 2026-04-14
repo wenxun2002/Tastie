@@ -39,7 +39,7 @@ class RecipeFirestore {
   /// Firestore Timestamp or milliseconds since epoch. Null when creating (server sets it).
   final dynamic createdAt;
 
-  Map<String, dynamic> toFirestore() {
+  Map<String, dynamic> toJson() {
     return <String, dynamic>{
       'userId': userId,
       'authorUid': userId,
@@ -60,6 +60,8 @@ class RecipeFirestore {
       if (createdAt != null) 'createdAt': createdAt,
     };
   }
+
+  Map<String, dynamic> toFirestore() => toJson();
 
   /// Build from Firestore document (doc.id + doc.data()).
   factory RecipeFirestore.fromFirestore(String docId, Map<String, dynamic> data) {

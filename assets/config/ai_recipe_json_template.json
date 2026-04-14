@@ -1,0 +1,106 @@
+{
+  "templateVersion": "1.0.0",
+  "templateName": "Tastie AI Recipe Output Template",
+  "goal": "AI only generates ingredients, nutrition, and procedures. Title/content/photos remain user-authored.",
+  "allowedUnits": {
+    "normalUnits": ["g", "kg", "ml", "l"],
+    "specialUnits": ["a few drops", "a pinch", "to taste", "as needed", "handful"]
+  },
+  "coreRules": {
+    "doNotModifyUserFields": ["title", "content", "photos"],
+    "requiredGeneratedFields": ["ingredients", "nutrition", "procedures"],
+    "ingredientRules": [
+      "Each ingredient must include name, unit, amount.",
+      "If unit is in specialUnits, amount must be 0.",
+      "If unit is in normalUnits, amount should be a positive number.",
+      "unit must be one of allowedUnits.normalUnits or allowedUnits.specialUnits."
+    ],
+    "nutritionRules": [
+      "nutrition must include calories, protein, carbs, fat.",
+      "All nutrition values should be numbers >= 0."
+    ],
+    "procedureRules": [
+      "procedures must be a non-empty ordered list of strings.",
+      "Each item should describe one clear cooking action."
+    ]
+  },
+  "aiOutputSchema": {
+    "type": "object",
+    "required": ["ingredients", "nutrition", "procedures"],
+    "properties": {
+      "ingredients": {
+        "type": "array",
+        "itemType": {
+          "type": "object",
+          "required": ["name", "amount", "unit"],
+          "properties": {
+            "name": "string",
+            "amount": "number",
+            "unit": "string"
+          }
+        }
+      },
+      "nutrition": {
+        "type": "object",
+        "required": ["calories", "protein", "carbs", "fat"],
+        "properties": {
+          "calories": "number",
+          "protein": "number",
+          "carbs": "number",
+          "fat": "number"
+        }
+      },
+      "procedures": {
+        "type": "array",
+        "itemType": "string"
+      }
+    }
+  },
+  "clientMergeContract": {
+    "description": "Frontend merges AI output into existing form state without changing title/content/photos.",
+    "mergeMode": "generated_only",
+    "userOwnedFields": ["title", "content", "photos", "tags"],
+    "aiOwnedFields": ["ingredients", "nutrition", "procedures"]
+  },
+  "exampleAiOutput": {
+    "ingredients": [
+      { "name": "Chicken Breast", "amount": 220, "unit": "g" },
+      { "name": "Spaghetti", "amount": 180, "unit": "g" },
+      { "name": "Garlic", "amount": 12, "unit": "g" },
+      { "name": "Salt", "amount": 0, "unit": "to taste" }
+    ],
+    "nutrition": {
+      "calories": 620,
+      "protein": 42,
+      "carbs": 58,
+      "fat": 24
+    },
+    "procedures": [
+      "Boil salted water and cook spaghetti until al dente.",
+      "Pan-sear seasoned chicken breast until cooked through.",
+      "Saute minced garlic, then toss with pasta and sliced chicken.",
+      "Season with salt to taste and serve."
+    ]
+  },
+  "exampleFinalRecipeDocumentForFirestore": {
+    "title": "User title stays unchanged",
+    "content": "User content stays unchanged",
+    "photos": [
+      "user-selected-local-or-uploaded-photo-url-1"
+    ],
+    "ingredients": [
+      { "name": "Chicken Breast", "amount": 220, "unit": "g" },
+      { "name": "Salt", "amount": 0, "unit": "to taste" }
+    ],
+    "nutrition": {
+      "calories": 620,
+      "protein": 42,
+      "carbs": 58,
+      "fat": 24
+    },
+    "procedures": [
+      "Boil salted water and cook spaghetti until al dente.",
+      "Serve immediately."
+    ]
+  }
+}
