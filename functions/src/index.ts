@@ -8,9 +8,12 @@
  *
  * Optional: `GEMINI_MODEL` — e.g. gemini-2.0-flash (default). Older IDs like
  * gemini-1.5-flash often return 404 from the API.
+ *
+ * Callable body may include `images`: array of `{ data: base64, mimeType? }`
+ * (max 4, ~4MB each after decode) for multimodal Smart Generate.
  */
 
-import type {Schema} from "@google/generative-ai";
+import type {InlineDataPart, Part, Schema} from "@google/generative-ai";
 import {GoogleGenerativeAI, SchemaType} from "@google/generative-ai";
 import {setGlobalOptions} from "firebase-functions";
 import {HttpsError, onCall} from "firebase-functions/https";
@@ -171,6 +174,56 @@ function normalizeAndValidate(parsed: unknown): SmartGenerateResult {
   return {ingredients, nutrition, procedures};
 }
 
+const MAX_SMART_IMAGES = 4;
+const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
+
+/**
+ * Parses client `images: [{ data: base64, mimeType?: string }]` for Gemini.
+ * @param {unknown} raw Request field `images`.
+ * @return {InlineDataPart[]} Inline image parts (max MAX_SMART_IMAGES).
+ */
+function buildInlineImageParts(raw: unknown): InlineDataPart[] {
+  const parts: InlineDataPart[] = [];
+  if (!Array.isArray(raw)) {
+    return parts;
+  }
+  for (let i = 0; i < raw.length && parts.length < MAX_SMART_IMAGES; i++) {
+    const item = raw[i];
+    if (!item || typeof item !== "object") {
+      continue;
+    }
+    const row = item as Record<string, unknown>;
+    const b64 = String(row.data ?? row.base64 ?? "").trim();
+    if (!b64) {
+      continue;
+    }
+    let mime = String(row.mimeType ?? "image/jpeg").toLowerCase();
+    if (!mime.startsWith("image/")) {
+      mime = "image/jpeg";
+    }
+    let buffer: Buffer;
+    try {
+      buffer = Buffer.from(b64, "base64");
+    } catch {
+      continue;
+    }
+    if (buffer.length === 0 || buffer.length > MAX_IMAGE_BYTES) {
+      logger.warn("smartGenerate: skip image (size)", {
+        index: i,
+        bytes: buffer.length,
+      });
+      continue;
+    }
+    parts.push({
+      inlineData: {
+        mimeType: mime,
+        data: b64,
+      },
+    });
+  }
+  return parts;
+}
+
 export const smartGenerate = onCall(
   {
     region: "asia-southeast1",
@@ -199,11 +252,12 @@ export const smartGenerate = onCall(
     const title = String(data.title ?? "").trim();
     const content = String(data.content ?? "").trim();
     const userInput = String(data.userInput ?? "").trim();
+    const imageParts = buildInlineImageParts(data.images);
 
-    if (!title && !content && !userInput) {
+    if (!title && !content && !userInput && imageParts.length === 0) {
       throw new HttpsError(
         "invalid-argument",
-        "Provide title, content, or userInput for Smart Generate.",
+        "Provide title, description, notes, or at least one image.",
       );
     }
 
@@ -227,13 +281,25 @@ export const smartGenerate = onCall(
       "3) Language Constraint: Regardless of input language (e.g. Chinese),",
       "ingredient names and procedure steps MUST be written in English only.",
       "",
+    ];
+
+    if (imageParts.length > 0) {
+      userPromptParts.push(
+        `Multimodal: ${imageParts.length} food photo(s) are attached. ` +
+          "When user text is short, rely primarily on the images to infer " +
+          "the dish, ingredients, and realistic cooking steps. " +
+          "Stay consistent with what is visible.",
+        "",
+      );
+    }
+
+    userPromptParts.push(
       "Context from the user:",
       title ? `Title:\n${title}` : "",
       content ? `Description:\n${content}` : "",
       userInput ? `Additional notes:\n${userInput}` : "",
-    ].filter(Boolean);
-
-    const prompt = userPromptParts.join("\n");
+    );
+    const prompt = userPromptParts.filter(Boolean).join("\n");
 
     try {
       const modelId =
@@ -247,7 +313,8 @@ export const smartGenerate = onCall(
         },
       });
 
-      const result = await model.generateContent(prompt);
+      const parts: Array<string | Part> = [...imageParts, prompt];
+      const result = await model.generateContent(parts);
       const response = result.response;
       const text = response.text();
       if (!text) {

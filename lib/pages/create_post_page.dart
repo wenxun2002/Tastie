@@ -14,10 +14,12 @@ import 'package:tastie/pages/index_page/index_controller.dart';
 import 'package:tastie/repositories/firestore_tag_repository.dart';
 import 'package:tastie/services/ai_recipe_json_validator.dart';
 import 'package:tastie/services/create_recipe_service.dart';
+import 'package:tastie/services/smart_generate_image_encoder.dart';
 import 'package:tastie/services/smart_generate_service.dart';
 import 'package:tastie/widgets/photo_upload_row.dart';
 import 'package:tastie/widgets/primary_button.dart';
 import 'package:tastie/widgets/smart_generate_button.dart';
+import 'package:tastie/widgets/smart_generate_neon_loading_overlay.dart';
 import 'package:tastie/widgets/tag_list_scroll.dart';
 
 enum CreatePostStep { post, ingredients, procedures }
@@ -136,11 +138,14 @@ class _CreatePostPageState extends State<CreatePostPage> {
     if (_isSubmitting || _isSmartGenerating) return;
     final title = _titleController.text.trim();
     final content = _contentController.text.trim();
-    if (title.isEmpty && content.isEmpty) {
+    final notes = userInput.trim();
+    if (title.isEmpty && content.isEmpty && notes.isEmpty && _photos.isEmpty) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Add a title or description before Smart Generate.'),
+          content: Text(
+            'Add a title, description, notes, or pick at least one photo.',
+          ),
         ),
       );
       return;
@@ -148,10 +153,27 @@ class _CreatePostPageState extends State<CreatePostPage> {
 
     setState(() => _isSmartGenerating = true);
     try {
+      var imagesPayload = const <Map<String, String>>[];
+      if (_photos.isNotEmpty) {
+        imagesPayload = await SmartGenerateImageEncoder.encodePaths(
+          _photos.map((f) => f.path).toList(growable: false),
+        );
+        if (imagesPayload.isEmpty) {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Could not read photos. Try smaller images.'),
+            ),
+          );
+          return;
+        }
+      }
+
       final raw = await SmartGenerateService.instance.call(
         title: title,
         content: content,
         userInput: userInput,
+        images: imagesPayload,
       );
       final validation = AiRecipeJsonValidator.validate(raw);
       if (!validation.isValid) {
@@ -533,38 +555,57 @@ class _CreatePostPageState extends State<CreatePostPage> {
     });
   }
 
+  Widget _loadingCenterCard(ThemeData theme, String message) {
+    return Card(
+      margin: const EdgeInsets.symmetric(horizontal: 32),
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const CircularProgressIndicator(),
+            const SizedBox(height: 16),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: theme.textTheme.bodyMedium,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final bool isLastStep = _currentStep == CreatePostStep.procedures;
 
-    final overlay =
-        (_isSubmitting || _isSmartGenerating)
-            ? Container(
-                color: Colors.black26,
-                child: Center(
-                  child: Card(
-                    margin: const EdgeInsets.symmetric(horizontal: 32),
-                    child: Padding(
-                      padding: const EdgeInsets.all(24),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const CircularProgressIndicator(),
-                          const SizedBox(height: 16),
-                          Text(
-                            _isSmartGenerating
-                                ? 'Smart Generate…'
-                                : (_submitProgress ?? 'Please wait…'),
-                            style: theme.textTheme.bodyMedium,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              )
-            : const SizedBox.shrink();
+    final Widget overlay;
+    if (_isSmartGenerating) {
+      overlay = AbsorbPointer(
+        child: SmartGenerateNeonLoadingOverlay(
+          centerChild: _loadingCenterCard(
+            theme,
+            'Smart Generate…\nReading recipe & photos',
+          ),
+        ),
+      );
+    } else if (_isSubmitting) {
+      overlay = AbsorbPointer(
+        child: Container(
+          color: Colors.black26,
+          child: Center(
+            child: _loadingCenterCard(
+              theme,
+              _submitProgress ?? 'Please wait…',
+            ),
+          ),
+        ),
+      );
+    } else {
+      overlay = const SizedBox.shrink();
+    }
 
     return Stack(
       children: [

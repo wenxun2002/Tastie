@@ -16,6 +16,7 @@ class SmartGenerateService {
     required String title,
     required String content,
     String userInput = '',
+    List<Map<String, String>> images = const [],
   }) async {
     final HttpsCallable callable = _functions.httpsCallable('smartGenerate');
     final HttpsCallableResult<dynamic> result = await callable.call(
@@ -23,6 +24,7 @@ class SmartGenerateService {
         'title': title,
         'content': content,
         'userInput': userInput,
+        if (images.isNotEmpty) 'images': images,
       },
     );
     final Object? data = result.data;
