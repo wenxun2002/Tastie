@@ -56,6 +56,7 @@ dependencies:
   # 使用 6.x 版本以支持 GoogleSignIn().signIn() 原生弹窗 API
   google_sign_in: ^6.1.5
   sign_in_button: ^4.0.1
+  cloud_functions: 6.0.4
 
 dev_dependencies:
   flutter_test:

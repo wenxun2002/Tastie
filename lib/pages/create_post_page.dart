@@ -1,3 +1,4 @@
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
@@ -13,6 +14,7 @@ import 'package:tastie/pages/index_page/index_controller.dart';
 import 'package:tastie/repositories/firestore_tag_repository.dart';
 import 'package:tastie/services/ai_recipe_json_validator.dart';
 import 'package:tastie/services/create_recipe_service.dart';
+import 'package:tastie/services/smart_generate_service.dart';
 import 'package:tastie/widgets/photo_upload_row.dart';
 import 'package:tastie/widgets/primary_button.dart';
 import 'package:tastie/widgets/smart_generate_button.dart';
@@ -44,6 +46,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
   late final StepProgressController _stepProgressController;
 
   bool _isSubmitting = false;
+  bool _isSmartGenerating = false;
   String? _submitProgress;
   String? _submitError;
 
@@ -124,8 +127,79 @@ class _CreatePostPageState extends State<CreatePostPage> {
   }
 
   void _handleSmartGenerate() {
-    // TODO: integrate smart generate flow.
-    _goToStep(CreatePostStep.ingredients);
+    triggerSmartGenerate('');
+  }
+
+  /// Calls Cloud Function `smartGenerate` with the current title/description.
+  /// Optional [userInput] can carry extra instructions (same language as input).
+  Future<void> triggerSmartGenerate(String userInput) async {
+    if (_isSubmitting || _isSmartGenerating) return;
+    final title = _titleController.text.trim();
+    final content = _contentController.text.trim();
+    if (title.isEmpty && content.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Add a title or description before Smart Generate.'),
+        ),
+      );
+      return;
+    }
+
+    setState(() => _isSmartGenerating = true);
+    try {
+      final raw = await SmartGenerateService.instance.call(
+        title: title,
+        content: content,
+        userInput: userInput,
+      );
+      final validation = AiRecipeJsonValidator.validate(raw);
+      if (!validation.isValid) {
+        final message = validation.errors.isNotEmpty
+            ? validation.errors.first
+            : 'Invalid AI JSON format';
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('AI JSON invalid: $message')),
+        );
+        return;
+      }
+
+      final merged = <String, dynamic>{
+        ...raw,
+        'title': '',
+        'content': '',
+        'tags': <String>[],
+      };
+      final data = CreatePostData.fromJson(merged);
+      if (!mounted) return;
+      _applyGeneratedData(data);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Smart Generate applied')),
+      );
+    } on FirebaseFunctionsException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Smart Generate failed: ${e.code} ${e.message ?? ''}',
+          ),
+          duration: const Duration(seconds: 5),
+        ),
+      );
+    } catch (e, st) {
+      // ignore: avoid_print
+      print('Smart Generate error: $e\n$st');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Smart Generate failed: $e')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isSmartGenerating = false);
+      }
+    }
   }
 
   void _handleTestSmartGenerate() {
@@ -464,30 +538,33 @@ class _CreatePostPageState extends State<CreatePostPage> {
     final theme = Theme.of(context);
     final bool isLastStep = _currentStep == CreatePostStep.procedures;
 
-    final overlay = _isSubmitting
-        ? Container(
-            color: Colors.black26,
-            child: Center(
-              child: Card(
-                margin: const EdgeInsets.symmetric(horizontal: 32),
-                child: Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const CircularProgressIndicator(),
-                      const SizedBox(height: 16),
-                      Text(
-                        _submitProgress ?? 'Please wait...',
-                        style: theme.textTheme.bodyMedium,
+    final overlay =
+        (_isSubmitting || _isSmartGenerating)
+            ? Container(
+                color: Colors.black26,
+                child: Center(
+                  child: Card(
+                    margin: const EdgeInsets.symmetric(horizontal: 32),
+                    child: Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const CircularProgressIndicator(),
+                          const SizedBox(height: 16),
+                          Text(
+                            _isSmartGenerating
+                                ? 'Smart Generate…'
+                                : (_submitProgress ?? 'Please wait…'),
+                            style: theme.textTheme.bodyMedium,
+                          ),
+                        ],
                       ),
-                    ],
+                    ),
                   ),
                 ),
-              ),
-            ),
-          )
-        : const SizedBox.shrink();
+              )
+            : const SizedBox.shrink();
 
     return Stack(
       children: [
@@ -508,7 +585,10 @@ class _CreatePostPageState extends State<CreatePostPage> {
                       ),
                       PrimaryButton(
                         text: isLastStep ? 'Submit' : 'Next',
-                        onPressed: _isSubmitting ? null : _handleNextPressed,
+                        onPressed:
+                            (_isSubmitting || _isSmartGenerating)
+                                ? null
+                                : _handleNextPressed,
                       ),
                     ],
                   ),
@@ -619,10 +699,18 @@ class _CreatePostPageState extends State<CreatePostPage> {
           const SizedBox(height: 24),
           _buildTagSection(theme),
           const SizedBox(height: 16),
-          SmartGenerateButton(onTap: _handleSmartGenerate),
+          SmartGenerateButton(
+            onTap:
+                (_isSubmitting || _isSmartGenerating)
+                    ? null
+                    : _handleSmartGenerate,
+          ),
           const SizedBox(height: 8),
           OutlinedButton(
-            onPressed: _handleTestSmartGenerate,
+            onPressed:
+                (_isSubmitting || _isSmartGenerating)
+                    ? null
+                    : _handleTestSmartGenerate,
             child: const Text('Test Smart Generate'),
           ),
         ],

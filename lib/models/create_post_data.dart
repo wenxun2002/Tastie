@@ -43,8 +43,10 @@ class CreatePostData {
     final ingredientsRaw = (json['ingredients'] as List<dynamic>? ?? const []);
     final proceduresRaw = (json['procedures'] as List<dynamic>? ?? const []);
     final tagsRaw = (json['tags'] as List<dynamic>? ?? const []);
-    final nutritionRaw =
-        json['nutrition'] as Map<String, dynamic>? ?? const <String, dynamic>{};
+    final nutritionField = json['nutrition'];
+    final nutritionRaw = nutritionField is Map
+        ? Map<String, dynamic>.from(nutritionField)
+        : const <String, dynamic>{};
 
     return CreatePostData(
       title: (json['title'] ?? '').toString(),
@@ -53,7 +55,9 @@ class CreatePostData {
       ingredients: ingredientsRaw
           .map(
             (item) => IngredientData.fromJson(
-              Map<String, dynamic>.from(item as Map),
+              item is Map
+                  ? Map<String, dynamic>.from(item)
+                  : const <String, dynamic>{},
             ),
           )
           .toList(growable: false),
