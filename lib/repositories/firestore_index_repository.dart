@@ -1,6 +1,18 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:tastie/models/card_data.dart';
 import 'package:tastie/repositories/paginated_posts_result.dart';
+import 'package:tastie/utils/recipe_catalog_policy.dart';
+
+/// Explore 列表排序字段（Firestore `orderBy`）。
+enum ExploreFeedSort {
+  /// `orderBy('createdAt', descending: true)` — 非 neutral 天气各 tag 层内默认。
+  byCreatedAtDesc,
+
+  /// `orderBy('likeCount', descending: true)` — **neutral** 天气全库按热度。
+  ///
+  /// 需保证 `recipes` 文档含数值字段 `likeCount`（或仅参与排序的文档含该字段）。
+  byLikeCountDesc,
+}
 
 class FirestoreIndexRepository {
   final FirebaseFirestore _db;
@@ -8,50 +20,89 @@ class FirestoreIndexRepository {
 
   FirestoreIndexRepository({
     FirebaseFirestore? db,
-    // Home feed should show the real recipes users create.
     this.collectionPath = 'recipes',
   }) : _db = db ?? FirebaseFirestore.instance;
 
-  /// Explore feed: cursor pagination by [createdAt] descending (newest first).
+  /// Explore feed：可选 `tags` 过滤 + 分页游标 + 排序。
   ///
-  /// [startAfterDocument] is the last document from the previous page; `null` loads the first page.
+  /// **索引提示**
+  /// - `arrayContainsAny` + `orderBy('createdAt')` → 复合索引：`tags` + `createdAt` 降序。
+  /// - 仅 `orderBy('likeCount')`、无 `where` → 通常自动单字段索引；若控制台提示再建。
+  /// - `arrayContainsAny` + `orderBy('likeCount')` → 需复合索引（当前 neutral 不按标签过滤）。
   Future<PaginatedPostsResult> getPostsPaginated({
     int limit = 10,
     DocumentSnapshot<Map<String, dynamic>>? startAfterDocument,
+    List<String>? filterTags,
+    ExploreFeedSort sort = ExploreFeedSort.byCreatedAtDesc,
   }) async {
-    Query<Map<String, dynamic>> query = _db
-        .collection(collectionPath)
-        .orderBy('createdAt', descending: true)
-        .limit(limit);
+    final String orderField = sort == ExploreFeedSort.byLikeCountDesc
+        ? 'likeCount'
+        : 'createdAt';
 
-    if (startAfterDocument != null) {
-      query = query.startAfterDocument(startAfterDocument);
+    /// 多取一些再过滤 `banned`，避免「一页 10 条里多条被封」时露不出足够卡片。
+    final int batchSize = (limit * 4).clamp(20, 80);
+    const int maxBatches = 24;
+
+    final items = <CardData>[];
+    DocumentSnapshot<Map<String, dynamic>>? cursor = startAfterDocument;
+    DocumentSnapshot<Map<String, dynamic>>? lastConsumed;
+    var batchFull = false;
+
+    for (var b = 0; b < maxBatches && items.length < limit; b++) {
+      Query<Map<String, dynamic>> query = _db.collection(collectionPath);
+
+      if (filterTags != null && filterTags.isNotEmpty) {
+        query = query.where('tags', arrayContainsAny: filterTags);
+      }
+
+      query = query.orderBy(orderField, descending: true);
+      if (cursor != null) {
+        query = query.startAfterDocument(cursor);
+      }
+      query = query.limit(batchSize);
+
+      final snapshot = await query.get();
+      final docs = snapshot.docs;
+      if (docs.isEmpty) {
+        batchFull = false;
+        break;
+      }
+
+      batchFull = docs.length == batchSize;
+      cursor = docs.last;
+
+      for (final doc in docs) {
+        lastConsumed = doc;
+        final data = doc.data();
+        if (!recipeDocIsPublicCatalogVisible(data)) continue;
+        items.add(CardData.fromJson(_normalizeCardDataJson(doc.id, data)));
+        if (items.length >= limit) {
+          break;
+        }
+      }
+
+      if (items.length >= limit) {
+        break;
+      }
     }
 
-    final snapshot = await query.get();
-    final docs = snapshot.docs;
-
-    final items = docs
-        .map((doc) => CardData.fromJson(_normalizeCardDataJson(doc.id, doc.data())))
-        .toList(growable: false);
-
-    final hasMore = docs.length == limit;
-    final DocumentSnapshot<Map<String, dynamic>>? lastDocument =
-        docs.isEmpty ? null : docs.last;
+    /// 未满 [limit] 条视为没有下一页；满页且上一批仍「装满」说明服务器上可能还有后续文档。
+    final hasMore = items.length == limit && batchFull;
 
     return PaginatedPostsResult(
       items: items,
       hasMore: hasMore,
-      lastDocument: lastDocument,
+      lastDocument: lastConsumed,
     );
   }
 
-  /// Full collection read — avoid for Explore; use [getPostsPaginated] instead.
   @Deprecated('Use getPostsPaginated for the Explore feed')
   Future<List<CardData>> getAll() async {
     final snapshot =
         await _db.collection(collectionPath).orderBy('createdAt', descending: true).get();
-    return snapshot.docs.map((doc) {
+    return snapshot.docs
+        .where((doc) => recipeDocIsPublicCatalogVisible(doc.data()))
+        .map((doc) {
       final data = doc.data();
       return CardData.fromJson(_normalizeCardDataJson(doc.id, data));
     }).toList(growable: false);
@@ -61,6 +112,7 @@ class FirestoreIndexRepository {
     final doc = await _db.collection(collectionPath).doc(id).get();
     final data = doc.data();
     if (!doc.exists || data == null) return null;
+    if (!recipeDocIsPublicCatalogVisible(data)) return null;
     return CardData.fromJson(_normalizeCardDataJson(doc.id, data));
   }
 
@@ -86,4 +138,3 @@ class FirestoreIndexRepository {
     };
   }
 }
-

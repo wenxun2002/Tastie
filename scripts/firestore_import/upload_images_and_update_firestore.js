@@ -126,7 +126,7 @@ async function main() {
 
   const { db, bucket } = initAdmin();
 
-  const collections = ['index_cards', 'card_details'];
+  const collections = ['recipes'];
   const allDocs = [];
   const assetPaths = new Set();
 

@@ -14,7 +14,7 @@
     "firebase-admin": "^13.7.0"
   },
   "version": "1.0.0",
-  "description": "This script imports the existing mock JSON files into **Cloud Firestore**:",
+  "description": "Import assets/mock/tag_list.json into Firestore collection tags.",
   "main": "index.js",
   "keywords": [],
   "author": "",

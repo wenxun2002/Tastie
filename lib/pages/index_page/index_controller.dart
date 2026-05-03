@@ -1,30 +1,45 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:tastie/constants/pages.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:tastie/data/tag_policy.dart';
 import 'package:tastie/models/card_data.dart';
 import 'package:tastie/repositories/recipe_engagement_repository.dart';
 import 'package:tastie/models/weather_data.dart';
 import 'package:tastie/mock/mock_weather.dart';
-import 'package:tastie/repositories/weather_repository.dart';
 import 'package:tastie/repositories/firestore_index_repository.dart';
 import 'package:tastie/data/weather_category.dart';
+import 'package:tastie/services/weather_context_service.dart';
 import 'package:tastie/utils/weather_classifier.dart';
+
+/// 非 neutral 天气下 Explore 的瀑布降级：promoted → neutral → suppressed → 结束。
+enum FetchStage { promoted, neutral, suppressed, done }
 
 class IndexController extends GetxController
     with GetSingleTickerProviderStateMixin {
   static const int _pageSize = 10;
+  static const int _maxNeutralFetchLoops = 12;
+  static const int _maxBootstrapGuard = 24;
 
   late TabController tabController;
-  List<CardData> data = []; // Explore feed (newest-first pages appended)
+  List<CardData> data = []; // Explore feed
   bool isInitialLoading = true; // Show skeleton until data + images ready
   bool isDataReady = false; // Data fetched from backend
   WeatherData currentWeather = MockWeather.weatherNeutral; // Default weather
 
-  /// Firestore cursor: last document of the current last loaded page.
+  /// neutral 天气：按 [likeCount] 分页的游标。
+  DocumentSnapshot<Map<String, dynamic>>? _cursorNeutralPopular;
+
+  /// 非 neutral：三层 tag 共用同一 [DocumentSnapshot] 游标；**每切换阶段必须置 `null`**。
+  FetchStage _currentStage = FetchStage.promoted;
   DocumentSnapshot<Map<String, dynamic>>? _lastDoc;
+
+  /// 跨阶段去重（同一菜谱可命中多组 tag）。
+  final Set<String> _exploreSeenIds = <String>{};
+  bool _neutralRemoteHasMore = true;
 
   /// Whether another page may exist after [data].
   bool hasMore = true;
@@ -33,7 +48,13 @@ class IndexController extends GetxController
   bool isFetchingMore = false;
   String? currentLocationName; // e.g. "Kuala Lumpur, Federal Territory"
   DateTime? _lastWeatherFetchAt;
-  WeatherData? _cachedWeather;
+  WeatherContextDto? _weatherContextCache;
+
+  /// BFF 天气分类 + Tag 角色（分层 / 过滤用）
+  WeatherCategory currentWeatherCategory = WeatherCategory.neutral;
+  List<String> exploreFilterPromotedTags = [];
+  List<String> exploreNeutralTags = [];
+  List<String> exploreSuppressedTags = [];
 
   /// 下拉选择器中当前展示的“分类天气”（始终是几个 MockWeather 之一）
   WeatherData selectorWeather = MockWeather.weatherNeutral;
@@ -47,8 +68,146 @@ class IndexController extends GetxController
     super.onInit();
     tabController = TabController(length: 3, vsync: this, initialIndex: 1);
     loadData();
-    // 异步加载当前位置天气（带缓存 & 错误处理）
-    loadWeatherData();
+  }
+
+  bool get _isWeatherCacheValid =>
+      _lastWeatherFetchAt != null &&
+      _weatherContextCache != null &&
+      DateTime.now().difference(_lastWeatherFetchAt!).inMinutes < 60;
+
+  void _resetExplorePaginationState() {
+    _cursorNeutralPopular = null;
+    _currentStage = FetchStage.promoted;
+    _lastDoc = null;
+    _exploreSeenIds.clear();
+    _neutralRemoteHasMore = true;
+  }
+
+  List<String>? _tagsForFetchStage(FetchStage stage) {
+    if (stage == FetchStage.done) return null;
+    final List<String> raw = switch (stage) {
+      FetchStage.promoted => exploreFilterPromotedTags,
+      FetchStage.neutral => exploreNeutralTags,
+      FetchStage.suppressed => exploreSuppressedTags,
+      FetchStage.done => <String>[],
+    };
+    if (raw.isEmpty) return null;
+    return List<String>.from(raw.take(10));
+  }
+
+  /// neutral 天气：不按 tag，`likeCount` 降序分页。
+  Future<void> _pullNeutralPopularBatch({required bool forLoadMore}) async {
+    final repository = FirestoreIndexRepository();
+    int added = 0;
+    int loops = 0;
+    var cursor = forLoadMore ? _cursorNeutralPopular : null;
+    var remoteHasMore = _neutralRemoteHasMore;
+
+    while (added < _pageSize && loops < _maxNeutralFetchLoops) {
+      loops++;
+      final page = await repository.getPostsPaginated(
+        limit: _pageSize,
+        startAfterDocument: cursor,
+        filterTags: null,
+        sort: ExploreFeedSort.byLikeCountDesc,
+      );
+      cursor = page.lastDocument;
+      _cursorNeutralPopular = cursor;
+      remoteHasMore = page.hasMore;
+
+      for (final item in page.items) {
+        if (_exploreSeenIds.add(item.id)) {
+          data.add(item);
+          added++;
+          if (added >= _pageSize) break;
+        }
+      }
+      if (added >= _pageSize) break;
+      if (!page.hasMore) break;
+    }
+    _neutralRemoteHasMore = remoteHasMore;
+    hasMore = remoteHasMore;
+  }
+
+  /// 单次 Firestore 拉取（当前 [_currentStage]），并在 `items.length < limit` 时瀑布降级。
+  /// 返回本次**新加入列表**的去重条数。
+  Future<int> _appendOneWeatherTaggedPage() async {
+    if (_currentStage == FetchStage.done) return 0;
+
+    var tags = _tagsForFetchStage(_currentStage);
+    if (tags == null || tags.isEmpty) {
+      if (_currentStage == FetchStage.promoted) {
+        _currentStage = FetchStage.neutral;
+        _lastDoc = null;
+        hasMore = true;
+        return 0;
+      }
+      if (_currentStage == FetchStage.neutral) {
+        _currentStage = FetchStage.suppressed;
+        _lastDoc = null;
+        hasMore = true;
+        return 0;
+      }
+      _currentStage = FetchStage.done;
+      hasMore = false;
+      return 0;
+    }
+
+    final repository = FirestoreIndexRepository();
+    final page = await repository.getPostsPaginated(
+      limit: _pageSize,
+      startAfterDocument: _lastDoc,
+      filterTags: tags,
+      sort: ExploreFeedSort.byCreatedAtDesc,
+    );
+
+    var appended = 0;
+    for (final item in page.items) {
+      if (_exploreSeenIds.add(item.id)) {
+        data.add(item);
+        appended++;
+      }
+    }
+
+    if (page.items.length < _pageSize) {
+      if (_currentStage == FetchStage.promoted) {
+        _currentStage = FetchStage.neutral;
+        _lastDoc = null;
+        hasMore = true;
+      } else if (_currentStage == FetchStage.neutral) {
+        _currentStage = FetchStage.suppressed;
+        _lastDoc = null;
+        hasMore = true;
+      } else {
+        _currentStage = FetchStage.done;
+        hasMore = false;
+      }
+    } else {
+      _lastDoc = page.lastDocument;
+      hasMore = true;
+    }
+
+    return appended;
+  }
+
+  /// 首屏 / 刷新：非 neutral 时填满约 [_pageSize] 条，不足则静默 promoted → neutral → suppressed。
+  Future<void> _bootstrapWeatherTaggedFeed() async {
+    _currentStage = FetchStage.promoted;
+    _lastDoc = null;
+    var guard = 0;
+    while (data.length < _pageSize &&
+        _currentStage != FetchStage.done &&
+        guard < _maxBootstrapGuard) {
+      guard++;
+      final before = data.length;
+      await _appendOneWeatherTaggedPage();
+      if (data.length == before && _currentStage == FetchStage.done) {
+        break;
+      }
+    }
+    if (_currentStage == FetchStage.done) {
+      hasMore = false;
+    }
   }
 
   @override
@@ -61,23 +220,25 @@ class IndexController extends GetxController
     isInitialLoading = true;
     isDataReady = false;
     data = [];
-    _lastDoc = null;
+    _resetExplorePaginationState();
     hasMore = true;
     isFetchingMore = false;
     update(['post_list']);
 
+    await _ensureExploreWeatherContext(forceRefresh: false);
+
     try {
-      final repository = FirestoreIndexRepository();
-      final page = await repository.getPostsPaginated(limit: _pageSize);
-      data = List<CardData>.from(page.items);
-      _lastDoc = page.lastDocument;
-      hasMore = page.hasMore;
+      if (currentWeatherCategory == WeatherCategory.neutral) {
+        await _pullNeutralPopularBatch(forLoadMore: false);
+      } else {
+        await _bootstrapWeatherTaggedFeed();
+      }
       await _loadLikedRecipeIds();
       isDataReady = true;
       update(['post_list']);
     } catch (e) {
       data = [];
-      _lastDoc = null;
+      _resetExplorePaginationState();
       hasMore = false;
       await _loadLikedRecipeIds();
       isDataReady = true;
@@ -108,28 +269,31 @@ class IndexController extends GetxController
     update(['post_list']);
   }
 
-  /// 加载当前所在地的天气数据（带缓存）
+  /// 通过 BFF [getWeatherContext] 刷新天气与 Tag 策略；必要时重拉第一页 Explore。
   ///
-  /// - 默认缓存 60 分钟，只要在缓存期内就直接使用上次的天气数据；
-  /// - 任何错误（定位失败 / 请求失败 / 解析失败）都会回退到 Neutral 天气；
-  /// - 出错时会弹出对话框提示用户并可选择重试。
+  /// - 缓存 60 分钟内且 [forceRefresh] 为 false 时只恢复状态，不触发网络请求、不重拉 Feed；
+  /// - [forceRefresh] 为 true 时会重新请求 Callable 并重拉第一页。
   Future<void> loadWeatherData({bool forceRefresh = false}) async {
-    // 如果有缓存且仍在有效期内，则直接使用缓存数据
-    if (!forceRefresh &&
-        _lastWeatherFetchAt != null &&
-        _cachedWeather != null &&
-        DateTime.now().difference(_lastWeatherFetchAt!).inMinutes < 60) {
-      currentWeather = _cachedWeather!;
-      final cachedCategory = classifyWeather(currentWeather);
-      // ignore: avoid_print
-      print('[Weather] Category (cached from API): $cachedCategory');
-      _updateSelectorWeatherFromCurrent();
-      _notifyFeedOrderUnchanged();
+    if (!forceRefresh && _isWeatherCacheValid) {
+      _applyWeatherContextDto(_weatherContextCache!);
+      update(['post_list']);
       return;
     }
+    await _ensureExploreWeatherContext(forceRefresh: true);
+    await _reloadExploreFirstPageWithFilter();
+    update(['post_list']);
+  }
 
+  Future<void> _ensureExploreWeatherContext({required bool forceRefresh}) async {
+    if (!forceRefresh && _isWeatherCacheValid) {
+      _applyWeatherContextDto(_weatherContextCache!);
+      return;
+    }
+    await _fetchWeatherContextFromNetworkWithGeolocator();
+  }
+
+  Future<void> _fetchWeatherContextFromNetworkWithGeolocator() async {
     try {
-      // 1. 检查 & 请求定位权限
       final serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
         _handleWeatherError(
@@ -138,15 +302,13 @@ class IndexController extends GetxController
         return;
       }
 
-      final permission = await Geolocator.checkPermission();
-      LocationPermission finalPermission = permission;
-
+      var permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied) {
-        finalPermission = await Geolocator.requestPermission();
+        permission = await Geolocator.requestPermission();
       }
 
-      if (finalPermission == LocationPermission.denied ||
-          finalPermission == LocationPermission.deniedForever) {
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
         _handleWeatherError(
           'Location permission is not granted.\n\n'
           'Tastie uses your approximate city-level location to adjust food recommendations based on the weather.\n\n'
@@ -155,118 +317,52 @@ class IndexController extends GetxController
         return;
       }
 
-      // 2. 获取当前经纬度
       final position = await Geolocator.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.best,
       );
 
-      // 3. 请求 WeatherAPI 当前天气
-      final result = await WeatherRepository.getCurrentWeather(
+      final dto = await WeatherContextService.fetch(
         latitude: position.latitude,
         longitude: position.longitude,
       );
 
-      // 4. 更新状态 & 缓存
-      currentWeather = result.weather;
-      currentLocationName = result.locationName;
-      _cachedWeather = result.weather;
+      _weatherContextCache = dto;
       _lastWeatherFetchAt = DateTime.now();
-      _updateSelectorWeatherFromCurrent();
-      _notifyFeedOrderUnchanged();
+      _applyWeatherContextDto(dto);
 
-      // 5. 输出到终端（Console）
       // ignore: avoid_print
       print(
-        '[Weather] Raw position: ${position.latitude}, ${position.longitude}',
+        '[Weather/BFF] ${position.latitude}, ${position.longitude} | '
+        '${dto.locationName} | category=${dto.category} | promoted=${dto.promoted}',
       );
+    } on FirebaseFunctionsException catch (e) {
       // ignore: avoid_print
-      print(
-        '[Weather] Location: $currentLocationName | temp=${currentWeather.temperature}°C, '
-        'humidity=${currentWeather.humidity}%, feelsLike=${currentWeather.feelsLike}°C, '
-        'condition=${currentWeather.condition}',
+      print('[Weather/BFF] FirebaseFunctionsException: ${e.code} ${e.message}');
+      _handleWeatherError(
+        'Weather service is temporarily unavailable.\n'
+        'Please check your connection and try again.',
       );
-      final category = classifyWeather(currentWeather);
-      // ignore: avoid_print
-      print('[Weather] Category (from API): $category');
     } catch (e) {
-      // 不在弹窗中暴露完整异常（包含 URL 和 API key），只给用户友好提示
+      // ignore: avoid_print
+      print('[Weather/BFF] Error: $e');
       _handleWeatherError(
         'Failed to load weather data due to a network or server issue.\n'
         'Please check your internet connection and try again.',
       );
-      // 在控制台中仍然打印原始错误，方便调试
-      // ignore: avoid_print
-      print('[Weather] Error while loading weather data: $e');
     }
   }
 
-  /// Pull-to-refresh: Clear and reload first page
-  Future<void> refreshPosts() async {
-    isInitialLoading = true;
-    isDataReady = false;
-    data = [];
-    _lastDoc = null;
-    hasMore = true;
-    isFetchingMore = false;
-    update(['post_list']);
-
-    try {
-      final repository = FirestoreIndexRepository();
-      final page = await repository.getPostsPaginated(limit: _pageSize);
-      data = List<CardData>.from(page.items);
-      _lastDoc = page.lastDocument;
-      hasMore = page.hasMore;
-      await _loadLikedRecipeIds();
-      isDataReady = true;
-      update(['post_list']);
-
-      await loadWeatherData(forceRefresh: true);
-    } catch (e) {
-      data = [];
-      _lastDoc = null;
-      hasMore = false;
-      await _loadLikedRecipeIds();
-      isDataReady = true;
-      update(['post_list']);
-    }
+  void _applyWeatherContextDto(WeatherContextDto dto) {
+    currentWeather = dto.weather;
+    currentLocationName = dto.locationName.isEmpty ? null : dto.locationName;
+    currentWeatherCategory = dto.category;
+    exploreFilterPromotedTags = List<String>.from(dto.promoted.take(10));
+    exploreNeutralTags = List<String>.from(dto.neutral);
+    exploreSuppressedTags = List<String>.from(dto.suppressed);
+    _syncSelectorMockForCategory(dto.category);
   }
 
-  /// Infinite scroll: load next page using Firestore cursor
-  Future<void> loadMorePosts() async {
-    if (!hasMore || isFetchingMore || _lastDoc == null) return;
-
-    isFetchingMore = true;
-    update(['post_list']);
-
-    try {
-      final repository = FirestoreIndexRepository();
-      final page = await repository.getPostsPaginated(
-        limit: _pageSize,
-        startAfterDocument: _lastDoc,
-      );
-      data.addAll(page.items);
-      if (page.lastDocument != null) {
-        _lastDoc = page.lastDocument;
-      }
-      hasMore = page.hasMore;
-    } catch (_) {
-      // Keep existing items; allow retry on next scroll
-    }
-
-    isFetchingMore = false;
-    update(['post_list']);
-  }
-
-  /// Update weather (banner / selector). Feed order stays chronological (pagination-safe).
-  void updateWeather(WeatherData weather) {
-    currentWeather = weather;
-    selectorWeather = weather;
-    _notifyFeedOrderUnchanged();
-  }
-
-  /// 根据当前实时天气计算天气分类，并映射到一个固定的 MockWeather
-  void _updateSelectorWeatherFromCurrent() {
-    final category = classifyWeather(currentWeather);
+  void _syncSelectorMockForCategory(WeatherCategory category) {
     switch (category) {
       case WeatherCategory.hotHumid:
         selectorWeather = MockWeather.weatherHotHumid;
@@ -289,10 +385,124 @@ class IndexController extends GetxController
     }
   }
 
+  Future<void> _reloadExploreFirstPageWithFilter() async {
+    data = [];
+    _resetExplorePaginationState();
+    hasMore = true;
+    try {
+      if (currentWeatherCategory == WeatherCategory.neutral) {
+        await _pullNeutralPopularBatch(forLoadMore: false);
+      } else {
+        await _bootstrapWeatherTaggedFeed();
+      }
+      await _loadLikedRecipeIds();
+    } catch (_) {
+      data = [];
+      _resetExplorePaginationState();
+      hasMore = false;
+      await _loadLikedRecipeIds();
+    }
+  }
+
+  /// Pull-to-refresh: Clear and reload first page
+  Future<void> refreshPosts() async {
+    isInitialLoading = true;
+    isDataReady = false;
+    data = [];
+    _resetExplorePaginationState();
+    hasMore = true;
+    isFetchingMore = false;
+    update(['post_list']);
+
+    await _ensureExploreWeatherContext(forceRefresh: true);
+
+    try {
+      if (currentWeatherCategory == WeatherCategory.neutral) {
+        await _pullNeutralPopularBatch(forLoadMore: false);
+      } else {
+        await _bootstrapWeatherTaggedFeed();
+      }
+      await _loadLikedRecipeIds();
+      isDataReady = true;
+      update(['post_list']);
+    } catch (e) {
+      data = [];
+      _resetExplorePaginationState();
+      hasMore = false;
+      await _loadLikedRecipeIds();
+      isDataReady = true;
+      update(['post_list']);
+    }
+  }
+
+  /// 触底加载：neutral 按点赞序；非 neutral 按 [FetchStage]（promoted → neutral → suppressed）。
+  Future<void> loadMorePosts() async {
+    if (!hasMore || isFetchingMore) return;
+
+    if (currentWeatherCategory == WeatherCategory.neutral) {
+      isFetchingMore = true;
+      update(['post_list']);
+      try {
+        await _pullNeutralPopularBatch(forLoadMore: true);
+      } catch (_) {
+        // Keep existing items
+      }
+      isFetchingMore = false;
+      update(['post_list']);
+      return;
+    }
+
+    if (_currentStage == FetchStage.done) return;
+
+    isFetchingMore = true;
+    update(['post_list']);
+
+    try {
+      var totalAppended = 0;
+      var guard = 0;
+      while (totalAppended < _pageSize &&
+          _currentStage != FetchStage.done &&
+          guard < _maxBootstrapGuard) {
+        guard++;
+        final n = await _appendOneWeatherTaggedPage();
+        totalAppended += n;
+        if (n == 0 && _currentStage == FetchStage.done) {
+          break;
+        }
+      }
+    } catch (_) {
+      // Keep existing items; allow retry on next scroll
+    }
+
+    isFetchingMore = false;
+    update(['post_list']);
+  }
+
+  /// 手动选择天气：用本地 [classifyWeather] + [getTagPolicy] 对齐 Tag，并重拉第一页。
+  Future<void> updateWeather(WeatherData weather) async {
+    currentWeather = weather;
+    selectorWeather = weather;
+    final category = classifyWeather(weather);
+    currentWeatherCategory = category;
+    final policy = getTagPolicy(category);
+    exploreFilterPromotedTags = List<String>.from(policy.promoted.take(10));
+    exploreNeutralTags = List<String>.from(policy.neutral);
+    exploreSuppressedTags = List<String>.from(policy.suppressed);
+    await _reloadExploreFirstPageWithFilter();
+    update(['post_list']);
+  }
+
   void _handleWeatherError(String message) {
-    // 出错时回退到 Neutral 天气
     currentWeather = MockWeather.weatherNeutral;
     currentLocationName = null;
+    currentWeatherCategory = WeatherCategory.neutral;
+    exploreFilterPromotedTags = [];
+    final neutralPolicy = getTagPolicy(WeatherCategory.neutral);
+    exploreNeutralTags = List<String>.from(neutralPolicy.neutral);
+    exploreSuppressedTags = [];
+    selectorWeather = MockWeather.weatherNeutral;
+    _weatherContextCache = null;
+    _lastWeatherFetchAt = null;
     _notifyFeedOrderUnchanged();
 
     if (Get.context == null) return;
@@ -332,7 +542,13 @@ class IndexController extends GetxController
   }
 
   void openIndexDetailPage(String id) {
-    Get.toNamed(Pages.indexDetail, arguments: {"id": id});
+    Get.toNamed(
+      Pages.indexDetail,
+      arguments: <String, dynamic>{
+        'id': id,
+        'recordExploreDetailOpen': true,
+      },
+    );
   }
 
   // Alias for compatibility

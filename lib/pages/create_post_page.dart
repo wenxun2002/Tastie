@@ -138,13 +138,19 @@ class _CreatePostPageState extends State<CreatePostPage> {
     if (_isSubmitting || _isSmartGenerating) return;
     final title = _titleController.text.trim();
     final content = _contentController.text.trim();
-    final notes = userInput.trim();
-    if (title.isEmpty && content.isEmpty && notes.isEmpty && _photos.isEmpty) {
+    if (title.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Title is required for Smart Generate')),
+      );
+      return;
+    }
+    if (_photos.isEmpty) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
-            'Add a title, description, notes, or pick at least one photo.',
+            'Add at least one photo — required for Smart Generate.',
           ),
         ),
       );
@@ -303,6 +309,16 @@ class _CreatePostPageState extends State<CreatePostPage> {
           ).showSnackBar(const SnackBar(content: Text('Title is required')));
           return;
         }
+        if (_photos.isEmpty) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Add at least one photo — required so the feed layout stays consistent.',
+              ),
+            ),
+          );
+          return;
+        }
         _goToStep(CreatePostStep.ingredients);
         break;
       case CreatePostStep.ingredients:
@@ -361,6 +377,18 @@ class _CreatePostPageState extends State<CreatePostPage> {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Please enter a title')),
+        );
+      }
+      return;
+    }
+    if (data.photos.isEmpty) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Add at least one photo on the Post step before publishing.',
+            ),
+          ),
         );
       }
       return;
@@ -706,6 +734,15 @@ class _CreatePostPageState extends State<CreatePostPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          Text(
+            'Photos (required)',
+            style:
+                theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ) ??
+                const TextStyle(fontWeight: FontWeight.w600, fontSize: 18),
+          ),
+          const SizedBox(height: 8),
           PhotoUploadRow(
             maxPhotos: _maxPhotos,
             initialPhotos: _photos,

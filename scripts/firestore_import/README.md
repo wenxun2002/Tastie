@@ -1,12 +1,8 @@
 ## Tastie Firestore Import (one-time)
 
-This script imports the existing mock JSON files into **Cloud Firestore**:
+This script imports `assets/mock/tag_list.json` into Cloud Firestore collection **`tags`** (docId = `id`).
 
-- `assets/mock/index_list.json` → collection `index_cards` (docId = `id`)
-- `assets/mock/tag_list.json` → collection `tags` (docId = `id`)
-- `assets/mock/card_detail_list.json` → collection `card_details` (docId = `id`)
-
-Before writing, it **validates every item** against the expected structure used by the Flutter models.
+Explore feed and recipe details use the **`recipes`** collection only; legacy **`index_cards`** / **`card_details`** are no longer imported here.
 
 ### 1) Create a Firebase service account key
 
@@ -41,5 +37,4 @@ npm run import
 ### Optional env vars
 
 - `GOOGLE_APPLICATION_CREDENTIALS`: absolute path to your service account JSON (if you don't want to place it in the script folder)
-- `FIREBASE_PROJECT_ID`: defaults to `tastie-1701f`
-
+- `FIREBASE_PROJECT_ID`: defaults to value in the service account JSON

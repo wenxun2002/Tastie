@@ -38,6 +38,9 @@ class CreateRecipeService {
     if (user == null) {
       throw CreateRecipeException('Please sign in to create a recipe.');
     }
+    if (data.photos.isEmpty) {
+      throw CreateRecipeException('Please add at least one photo.');
+    }
 
     final userId = user.uid;
     final authorNickname = user.displayName ?? 'User';

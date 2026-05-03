@@ -16,6 +16,8 @@ class RecipeFirestore {
     required this.likeCount,
     required this.favCount,
     required this.commentCount,
+    this.status,
+    this.clicked = 0,
     this.createdAt,
   });
 
@@ -36,8 +38,15 @@ class RecipeFirestore {
   final int likeCount;
   final int favCount;
   final int commentCount;
+  /// Admin moderation: `active` / `banned`. Null/empty treated as active (legacy docs).
+  final String? status;
+  /// Implicit feedback: Explore 详情打开次数（`FieldValue.increment` 维护）。
+  final int clicked;
   /// Firestore Timestamp or milliseconds since epoch. Null when creating (server sets it).
   final dynamic createdAt;
+
+  bool get isHiddenFromPublicCatalog =>
+      (status ?? '').toString().toLowerCase() == 'banned';
 
   Map<String, dynamic> toJson() {
     return <String, dynamic>{
@@ -57,6 +66,8 @@ class RecipeFirestore {
       'likeCount': likeCount,
       'favCount': favCount,
       'commentCount': commentCount,
+      if (status != null) 'status': status,
+      'clicked': clicked,
       if (createdAt != null) 'createdAt': createdAt,
     };
   }
@@ -93,6 +104,8 @@ class RecipeFirestore {
       likeCount: (data['likeCount'] as num?)?.toInt() ?? 0,
       favCount: (data['favCount'] as num?)?.toInt() ?? 0,
       commentCount: (data['commentCount'] as num?)?.toInt() ?? 0,
+      status: data['status'] as String?,
+      clicked: (data['clicked'] as num?)?.toInt() ?? 0,
       createdAt: data['createdAt'],
     );
   }

@@ -64,7 +64,8 @@ class RecipeEngagementRepository {
         .snapshots()
         .asyncMap((snap) async {
       final ids = snap.docs.map((d) => d.id).toList();
-      return recipeRepo.getByIdsInOrder(ids);
+      final list = await recipeRepo.getByIdsInOrder(ids);
+      return list.where((r) => !r.isHiddenFromPublicCatalog).toList();
     });
   }
 
@@ -83,8 +84,15 @@ class RecipeEngagementRepository {
         .snapshots()
         .asyncMap((snap) async {
       final ids = snap.docs.map((d) => d.id).toList();
-      return recipeRepo.getByIdsInOrder(ids);
+      final list = await recipeRepo.getByIdsInOrder(ids);
+      return list.where((r) => !r.isHiddenFromPublicCatalog).toList();
     });
+  }
+
+  /// Explore 隐式反馈：用户从首页 Feed 进入详情时 +1（需登录；失败静默忽略）。
+  Future<void> incrementRecipeClicked(String recipeId) async {
+    if (recipeId.isEmpty) return;
+    await _recipeRef(recipeId).update({'clicked': FieldValue.increment(1)});
   }
 
   Stream<DocumentSnapshot<Map<String, dynamic>>> watchRecipe(String recipeId) =>

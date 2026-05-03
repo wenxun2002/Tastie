@@ -2,6 +2,7 @@ import 'dart:math';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:tastie/models/recipe_firestore.dart';
+import 'package:tastie/utils/recipe_catalog_policy.dart';
 
 /// Firestore CRUD for `recipes` collection.
 class FirestoreRecipeRepository {
@@ -18,6 +19,7 @@ class FirestoreRecipeRepository {
     map['createdAt'] = FieldValue.serverTimestamp();
     // Ensure new recipes follow the latest admin schema.
     map.putIfAbsent('status', () => 'active');
+    map.putIfAbsent('clicked', () => 0);
     // Optional compatibility: admin also reads these fields directly.
     map.putIfAbsent('authorUid', () => recipe.userId);
 
@@ -59,11 +61,14 @@ class FirestoreRecipeRepository {
     return RecipeFirestore.fromFirestore(doc.id, doc.data()!);
   }
 
-  /// Lists all recipes, newest first.
+  /// Lists all **public-catalog** recipes, newest first (excludes banned)。
+  ///
+  /// 不在 Firestore 层按 `status` 查询（旧文档可能无该字段）；拉全表后在内存中过滤。
   Future<List<RecipeFirestore>> getAll() async {
     final snapshot =
         await _db.collection(_collection).orderBy('createdAt', descending: true).get();
     return snapshot.docs
+        .where((doc) => recipeDocIsPublicCatalogVisible(doc.data()))
         .map((doc) => RecipeFirestore.fromFirestore(doc.id, doc.data()))
         .toList(growable: false);
   }
@@ -84,7 +89,7 @@ class FirestoreRecipeRepository {
         byId[doc.id] = RecipeFirestore.fromFirestore(doc.id, doc.data());
       }
     }
-    return ids.map((id) => byId[id]).whereType<RecipeFirestore>().toList();
+      return ids.map((id) => byId[id]).whereType<RecipeFirestore>().toList();
   }
 
   /// Deletes a recipe document by ID.

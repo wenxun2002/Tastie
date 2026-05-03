@@ -1,101 +1,63 @@
-# Mock 数据迁移指南
+# 本地 Mock 与 Firestore 说明
 
-## 📊 当前状态
+业务数据（首页 Feed、菜谱详情、用户互动）已以 **Cloud Firestore** 为准。历史上用于导入的 **`index_list.json`**、**`card_detail_list.json`** 及集合 **`index_cards`** / **`card_details`** 已从仓库与规则中移除，不再作为数据流的一部分。
 
-### ✅ 已完成迁移（JSON 格式）
-- **Card Detail Data** → `assets/mock/card_detail_list.json`
-  - 使用 `MockCardDetailRepository` 加载
-  - 已完全迁移，不再使用 `mock_card_detail.dart`
+---
 
-### ⚠️ 仍在使用 Dart 硬编码
-- **Index List Data** → `lib/mock/mock.dart` (Mock.indexData)
-  - 被 `index_controller.dart` 使用
-  - 需要迁移到 JSON
+## 当前状态
 
-- **Weather Test Data** → `lib/mock/mock_weather.dart` (MockWeather)
-  - 被 `index_controller.dart` 和 `weather_selector.dart` 使用
-  - 建议保留（测试数据，非业务数据）
+### Firestore 为唯一业务数据源
 
-## 🎯 建议操作
+- **菜谱**：`recipes`（Explore 列表 + 详情）
+- **标签**：`tags`（可通过脚本从 JSON 种子导入）
+- **用户与互动**：`users` 及其 `likes` / `collections` 子集合
 
-### 1. `mock_card_detail.dart` - 可以删除
-**状态**: ✅ 已完全迁移到 JSON
-**操作**: 
-- 可以删除此文件（已不再使用）
-- 或保留作为参考（注释掉）
+客户端相关实现见 `FirestoreIndexRepository`、`FirestoreRecipeRepository`、`FirestoreTagRepository`、`RecipeEngagementRepository` 等。
 
-### 2. `mock.dart` - 建议迁移到 JSON
-**状态**: ⚠️ 仍在使用
-**当前使用位置**:
-- `lib/pages/index_page/index_controller.dart` (3处)
+### 仍保留的本地 Mock（非 Firestore）
 
-**建议操作**:
-1. 创建 `assets/mock/index_list.json`
-2. 创建 `MockIndexRepository`
-3. 更新 `index_controller.dart` 使用 Repository
+| 用途 | 位置 | 说明 |
+|------|------|------|
+| 天气选择 / 测试场景 | `lib/mock/mock_weather.dart` | 供 `IndexController`、天气选择器等使用 |
+| 发帖页等本地占位 | `lib/mock/mock_recipe_data.dart` | 如 `create_post_page.dart` 引用 |
 
-### 3. `mock_weather.dart` - 建议保留
-**状态**: ✅ 可以保留
-**原因**: 
-- 这是测试数据，不是业务数据
-- 用于测试不同天气条件
-- 结构简单，不需要迁移
+这些文件**不替代**线上菜谱数据；仅开发或 UI 辅助。
 
-## 📝 数据修改位置
+---
 
-### 修改 Card Detail 数据
-**位置**: `assets/mock/card_detail_list.json`
-- 直接编辑 JSON 文件
-- 支持所有字段：title, author, tags, ingredients, procedures, nutrition 等
+## 可选：仅维护标签种子 JSON
 
-### 修改 Index List 数据（待迁移）
-**当前位置**: `lib/mock/mock.dart` (Mock.indexData)
-**迁移后**: `assets/mock/index_list.json`
+若需要向空项目灌入标签文档，可保留并编辑：
 
-### 修改 Weather 测试数据
-**位置**: `lib/mock/mock_weather.dart` (MockWeather)
-- 保留在 Dart 文件中即可
+- `assets/mock/tag_list.json`
 
-## 🔄 未来连接后端
+通过 `scripts/firestore_import` 执行导入（详见该目录下 `README.md`）。**App 的 `pubspec.yaml` 未将 `assets/mock/` 整体声明为 bundle 资源**，运行时不会 `rootBundle` 读取该文件。
 
-### Card Detail Data
-```dart
-// 当前: MockCardDetailRepository (从 JSON 加载)
-// 未来: 只需替换 Repository 实现
+---
 
-class FirebaseCardDetailRepository {
-  Future<List<CardDetailData>> getAll() async {
-    // 从 Firebase 加载
-  }
-}
-```
-
-### Index List Data（迁移后）
-```dart
-// 迁移后: MockIndexRepository (从 JSON 加载)
-// 未来: 只需替换 Repository 实现
-
-class FirebaseIndexRepository {
-  Future<List<CardData>> getAll() async {
-    // 从 Firebase 加载
-  }
-}
-```
-
-## 📁 推荐的文件结构
+## 文件结构（与 Mock 相关）
 
 ```
 assets/mock/
-  ├── card_detail_list.json      ✅ 已迁移
-  └── index_list.json             ⚠️ 待迁移
+  └── tag_list.json          # 可选：仅 firestore_import 使用
 
 lib/mock/
-  ├── mock_card_detail.dart      ❌ 可删除（已迁移）
-  ├── mock.dart                   ⚠️ 待迁移到 JSON
-  └── mock_weather.dart           ✅ 保留（测试数据）
+  ├── mock_weather.dart      # 天气 Mock
+  └── mock_recipe_data.dart  # 发帖等本地辅助
 
-lib/repositories/
-  ├── mock_card_detail_repository.dart  ✅ 已创建
-  └── mock_index_repository.dart        ⚠️ 待创建
+scripts/firestore_import/
+  ├── index.js               # → 写入 tags
+  └── upload_images_and_update_firestore.js  # 扫描 recipes 图片路径
 ```
 
+---
+
+## 历史说明（已废弃）
+
+以下已不再使用，避免按旧文档操作：
+
+- `MockIndexRepository` / `MockCardDetailRepository` 从 JSON 加载首页与详情
+- `CardDetailData` 模型与 `card_details` 集合
+- `index_list.json`、`card_detail_list.json` 作为运行时数据源
+
+若需回顾旧架构，请使用 Git 历史查看此前版本的 `DATA_FLOW_GUIDE.md` 与代码。

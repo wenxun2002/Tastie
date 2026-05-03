@@ -293,7 +293,13 @@ class _SearchResultPageState extends State<SearchResultPage> {
                 cardData: ranked.toCardData(),
                 isLiked: false,
                 onTap: () {
-                  Get.toNamed(Pages.indexDetail, arguments: {'id': ranked.recipe.id});
+                  Get.toNamed(
+                    Pages.indexDetail,
+                    arguments: <String, dynamic>{
+                      'id': ranked.recipe.id,
+                      'recordExploreDetailOpen': true,
+                    },
+                  );
                 },
               );
             },

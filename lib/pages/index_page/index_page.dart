@@ -182,7 +182,10 @@ class _ExplorePageState extends State<_ExplorePageStateful> {
                       onTap: () async {
                         final result = await Get.toNamed(
                           Pages.indexDetail,
-                          arguments: {"id": post.id},
+                          arguments: <String, dynamic>{
+                            'id': post.id,
+                            'recordExploreDetailOpen': true,
+                          },
                         );
                         await widget.controller.reloadLikedRecipeIds();
                         if (!context.mounted) return;

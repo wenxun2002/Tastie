@@ -42,7 +42,7 @@ class IndexDetailController extends GetxController {
   void onInit() {
     super.onInit();
     final args = Get.arguments;
-    final dynamic argId = (args is Map) ? args["id"] : null;
+    final dynamic argId = (args is Map) ? args['id'] : null;
     if (argId is String && argId.trim().isNotEmpty) {
       id = argId;
     } else {
@@ -124,6 +124,7 @@ class IndexDetailController extends GetxController {
       if (!isFail && id.isNotEmpty) {
         _startRecipeStream();
         _bindUserEngagementStreams(FirebaseAuth.instance.currentUser?.uid);
+        _maybeRecordExploreDetailClick();
       } else {
         _recipeSub?.cancel();
         _recipeSub = null;
@@ -131,6 +132,14 @@ class IndexDetailController extends GetxController {
       }
       update();
     }
+  }
+
+  void _maybeRecordExploreDetailClick() {
+    final dynamic args = Get.arguments;
+    if (args is! Map || args['recordExploreDetailOpen'] != true) return;
+    final User? user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    unawaited(_engagement.incrementRecipeClicked(id).catchError((_) {}));
   }
 
   void getCommentList() {
