@@ -201,14 +201,9 @@ class _ExplorePageState extends State<_ExplorePageStateful> {
                 ),
               ),
 
-              // Loading indicator for infinite scroll
+              // Infinite scroll: loading / end of feed
               SliverToBoxAdapter(
-                child: widget.controller.isLoadingMore
-                    ? const Padding(
-                        padding: EdgeInsets.symmetric(vertical: 20),
-                        child: Center(child: CircularProgressIndicator()),
-                      )
-                    : const SizedBox.shrink(),
+                child: _buildPaginationFooter(context, widget.controller),
               ),
             ],
           ),
@@ -234,6 +229,34 @@ class _ExplorePageState extends State<_ExplorePageStateful> {
     } catch (_) {
       // 忽略单张图片预加载失败，避免阻塞 skeleton。
     }
+  }
+
+  Widget _buildPaginationFooter(BuildContext context, IndexController c) {
+    if (c.isInitialLoading) return const SizedBox.shrink();
+
+    if (c.isFetchingMore) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 20),
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (!c.hasMore && c.data.isNotEmpty) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 24),
+        child: Center(
+          child: Text(
+            'No more posts',
+            style: TextStyle(
+              fontSize: 13,
+              color: Theme.of(context).hintColor,
+            ),
+          ),
+        ),
+      );
+    }
+
+    return const SizedBox.shrink();
   }
 
   Future<void> _precacheAnyImage(BuildContext context, String url) async {

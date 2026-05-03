@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:tastie/models/card_data.dart';
+import 'package:tastie/repositories/paginated_posts_result.dart';
 
 class FirestoreIndexRepository {
   final FirebaseFirestore _db;
@@ -11,6 +12,42 @@ class FirestoreIndexRepository {
     this.collectionPath = 'recipes',
   }) : _db = db ?? FirebaseFirestore.instance;
 
+  /// Explore feed: cursor pagination by [createdAt] descending (newest first).
+  ///
+  /// [startAfterDocument] is the last document from the previous page; `null` loads the first page.
+  Future<PaginatedPostsResult> getPostsPaginated({
+    int limit = 10,
+    DocumentSnapshot<Map<String, dynamic>>? startAfterDocument,
+  }) async {
+    Query<Map<String, dynamic>> query = _db
+        .collection(collectionPath)
+        .orderBy('createdAt', descending: true)
+        .limit(limit);
+
+    if (startAfterDocument != null) {
+      query = query.startAfterDocument(startAfterDocument);
+    }
+
+    final snapshot = await query.get();
+    final docs = snapshot.docs;
+
+    final items = docs
+        .map((doc) => CardData.fromJson(_normalizeCardDataJson(doc.id, doc.data())))
+        .toList(growable: false);
+
+    final hasMore = docs.length == limit;
+    final DocumentSnapshot<Map<String, dynamic>>? lastDocument =
+        docs.isEmpty ? null : docs.last;
+
+    return PaginatedPostsResult(
+      items: items,
+      hasMore: hasMore,
+      lastDocument: lastDocument,
+    );
+  }
+
+  /// Full collection read — avoid for Explore; use [getPostsPaginated] instead.
+  @Deprecated('Use getPostsPaginated for the Explore feed')
   Future<List<CardData>> getAll() async {
     final snapshot =
         await _db.collection(collectionPath).orderBy('createdAt', descending: true).get();

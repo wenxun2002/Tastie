@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -9,19 +10,27 @@ import 'package:tastie/models/weather_data.dart';
 import 'package:tastie/mock/mock_weather.dart';
 import 'package:tastie/repositories/weather_repository.dart';
 import 'package:tastie/repositories/firestore_index_repository.dart';
-import 'package:tastie/utils/post_sorter.dart';
 import 'package:tastie/data/weather_category.dart';
 import 'package:tastie/utils/weather_classifier.dart';
 
 class IndexController extends GetxController
     with GetSingleTickerProviderStateMixin {
+  static const int _pageSize = 10;
+
   late TabController tabController;
-  List<CardData> _allData = []; // Original unsorted data
-  List<CardData> data = []; // Sorted data for display
+  List<CardData> data = []; // Explore feed (newest-first pages appended)
   bool isInitialLoading = true; // Show skeleton until data + images ready
   bool isDataReady = false; // Data fetched from backend
   WeatherData currentWeather = MockWeather.weatherNeutral; // Default weather
-  bool isLoadingMore = false; // Loading state for infinite scroll
+
+  /// Firestore cursor: last document of the current last loaded page.
+  DocumentSnapshot<Map<String, dynamic>>? _lastDoc;
+
+  /// Whether another page may exist after [data].
+  bool hasMore = true;
+
+  /// True while loading the next page (infinite scroll).
+  bool isFetchingMore = false;
   String? currentLocationName; // e.g. "Kuala Lumpur, Federal Territory"
   DateTime? _lastWeatherFetchAt;
   WeatherData? _cachedWeather;
@@ -49,24 +58,28 @@ class IndexController extends GetxController
   }
 
   void loadData() async {
-    // Start full reload with skeleton
     isInitialLoading = true;
     isDataReady = false;
+    data = [];
+    _lastDoc = null;
+    hasMore = true;
+    isFetchingMore = false;
     update(['post_list']);
 
-    // Load data from Firestore
     try {
       final repository = FirestoreIndexRepository();
-      _allData = await repository.getAll();
+      final page = await repository.getPostsPaginated(limit: _pageSize);
+      data = List<CardData>.from(page.items);
+      _lastDoc = page.lastDocument;
+      hasMore = page.hasMore;
       await _loadLikedRecipeIds();
-      _sortData();
       isDataReady = true;
       update(['post_list']);
     } catch (e) {
-      // Fallback: empty list if loading fails
-      _allData = [];
+      data = [];
+      _lastDoc = null;
+      hasMore = false;
       await _loadLikedRecipeIds();
-      _sortData();
       isDataReady = true;
       update(['post_list']);
     }
@@ -111,7 +124,7 @@ class IndexController extends GetxController
       // ignore: avoid_print
       print('[Weather] Category (cached from API): $cachedCategory');
       _updateSelectorWeatherFromCurrent();
-      _sortData();
+      _notifyFeedOrderUnchanged();
       return;
     }
 
@@ -159,7 +172,7 @@ class IndexController extends GetxController
       _cachedWeather = result.weather;
       _lastWeatherFetchAt = DateTime.now();
       _updateSelectorWeatherFromCurrent();
-      _sortData();
+      _notifyFeedOrderUnchanged();
 
       // 5. 输出到终端（Console）
       // ignore: avoid_print
@@ -187,69 +200,68 @@ class IndexController extends GetxController
     }
   }
 
-  /// Pull-to-refresh: Clear and reload initial posts
+  /// Pull-to-refresh: Clear and reload first page
   Future<void> refreshPosts() async {
-    // Start skeleton while refreshing
     isInitialLoading = true;
     isDataReady = false;
-    // 1. Clear list
-    data.clear();
+    data = [];
+    _lastDoc = null;
+    hasMore = true;
+    isFetchingMore = false;
     update(['post_list']);
 
-    // 2. Reload initial posts (mock or API)
-    await Future.delayed(
-      const Duration(milliseconds: 500),
-    ); // Simulate network delay
     try {
       final repository = FirestoreIndexRepository();
-      _allData = await repository.getAll();
+      final page = await repository.getPostsPaginated(limit: _pageSize);
+      data = List<CardData>.from(page.items);
+      _lastDoc = page.lastDocument;
+      hasMore = page.hasMore;
       await _loadLikedRecipeIds();
-      _sortData();
       isDataReady = true;
       update(['post_list']);
 
-      // 强制刷新天气（忽略缓存），确保下拉刷新会拿到最新天气
       await loadWeatherData(forceRefresh: true);
     } catch (e) {
-      // Fallback: empty list if loading fails
-      _allData = [];
+      data = [];
+      _lastDoc = null;
+      hasMore = false;
       await _loadLikedRecipeIds();
-      _sortData();
       isDataReady = true;
       update(['post_list']);
     }
   }
 
-  /// Infinite scroll: Load more posts when reaching bottom
+  /// Infinite scroll: load next page using Firestore cursor
   Future<void> loadMorePosts() async {
-    if (isLoadingMore) return;
+    if (!hasMore || isFetchingMore || _lastDoc == null) return;
 
-    isLoadingMore = true;
+    isFetchingMore = true;
     update(['post_list']);
 
-    // Simulate loading more posts from server or mock
-    await Future.delayed(const Duration(milliseconds: 800));
-
-    // For mock data, we'll duplicate existing data to simulate loading more
-    // In real app, you would fetch from API
     try {
       final repository = FirestoreIndexRepository();
-      final morePosts = await repository.getAll();
-      _allData.addAll(morePosts);
-      _sortData();
-    } catch (e) {
-      // If loading fails, just continue with existing data
+      final page = await repository.getPostsPaginated(
+        limit: _pageSize,
+        startAfterDocument: _lastDoc,
+      );
+      data.addAll(page.items);
+      if (page.lastDocument != null) {
+        _lastDoc = page.lastDocument;
+      }
+      hasMore = page.hasMore;
+    } catch (_) {
+      // Keep existing items; allow retry on next scroll
     }
 
-    isLoadingMore = false;
+    isFetchingMore = false;
     update(['post_list']);
   }
 
-  /// Update weather and re-sort data
+  /// Update weather (banner / selector). Feed order stays chronological (pagination-safe).
   void updateWeather(WeatherData weather) {
     currentWeather = weather;
     selectorWeather = weather;
-    _sortData();
+    _notifyFeedOrderUnchanged();
   }
 
   /// 根据当前实时天气计算天气分类，并映射到一个固定的 MockWeather
@@ -278,10 +290,10 @@ class IndexController extends GetxController
   }
 
   void _handleWeatherError(String message) {
-    // 出错时回退到 Neutral 天气 & 默认排序
+    // 出错时回退到 Neutral 天气
     currentWeather = MockWeather.weatherNeutral;
     currentLocationName = null;
-    _sortData();
+    _notifyFeedOrderUnchanged();
 
     if (Get.context == null) return;
 
@@ -315,13 +327,8 @@ class IndexController extends GetxController
     );
   }
 
-  /// Sort data based on current weather
-  void _sortData() {
-    data = sortPostsByWeather(
-      posts: List.from(_allData), // Create a copy to avoid modifying original
-      weather: currentWeather,
-    );
-    update(['post_list']); // Only update post_list, not entire page
+  void _notifyFeedOrderUnchanged() {
+    update(['post_list']);
   }
 
   void openIndexDetailPage(String id) {
