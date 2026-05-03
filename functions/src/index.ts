@@ -11,6 +11,9 @@
  *
  * Callable body may include `images`: array of `{ data: base64, mimeType? }`
  * (max 4, ~4MB each after decode) for multimodal Smart Generate.
+ *
+ * Weather BFF: set `OPENWEATHER_API_KEY` for `getWeatherContext`
+ * (see `weatherContext.ts`).
  */
 
 import type {InlineDataPart, Part, Schema} from "@google/generative-ai";
@@ -18,6 +21,8 @@ import {GoogleGenerativeAI, SchemaType} from "@google/generative-ai";
 import {setGlobalOptions} from "firebase-functions";
 import {HttpsError, onCall} from "firebase-functions/https";
 import * as logger from "firebase-functions/logger";
+
+export {getWeatherContext} from "./weatherContext";
 
 setGlobalOptions({maxInstances: 10});
 
