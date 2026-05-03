@@ -1,20 +1,63 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    function userLikePath(recipeId) {
+      return /databases/$(database)/documents/users/$(request.auth.uid)/likes/$(recipeId);
+    }
+
+    function userCollectionPath(recipeId) {
+      return /databases/$(database)/documents/users/$(request.auth.uid)/collections/$(recipeId);
+    }
+
+    function changedOnly(keys) {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(keys);
+    }
+
+    function isLikeCounterChange(recipeId) {
+      return changedOnly(['likeCount'])
+        && (
+          (
+            request.resource.data.likeCount == resource.data.likeCount + 1
+            && !exists(userLikePath(recipeId))
+            && existsAfter(userLikePath(recipeId))
+          )
+          || (
+            request.resource.data.likeCount == resource.data.likeCount - 1
+            && request.resource.data.likeCount >= 0
+            && exists(userLikePath(recipeId))
+            && !existsAfter(userLikePath(recipeId))
+          )
+        );
+    }
+
+    function isFavoriteCounterChange(recipeId) {
+      return changedOnly(['favCount'])
+        && (
+          (
+            request.resource.data.favCount == resource.data.favCount + 1
+            && !exists(userCollectionPath(recipeId))
+            && existsAfter(userCollectionPath(recipeId))
+          )
+          || (
+            request.resource.data.favCount == resource.data.favCount - 1
+            && request.resource.data.favCount >= 0
+            && exists(userCollectionPath(recipeId))
+            && !existsAfter(userCollectionPath(recipeId))
+          )
+        );
+    }
 
     // --- Recipes (feed + engagement counters on same doc) ---
     match /recipes/{recipeId} {
       allow read: if true;
       allow create: if request.auth != null
         && request.resource.data.userId == request.auth.uid;
-      // Author: full edit. Any signed-in user: counter increments (engagement).
-      // Admin app (client SDK): status-only merge for ban/unban.
+      // Authors can edit their recipes. Engagement counter updates must be
+      // paired with the caller's like/collection marker in the same commit.
       allow update: if request.auth != null && (
         resource.data.userId == request.auth.uid
-        || request.resource.data.diff(resource.data).affectedKeys()
-             .hasOnly(['likeCount', 'favCount'])
-        || request.resource.data.diff(resource.data).affectedKeys()
-             .hasOnly(['status'])
+        || isLikeCounterChange(recipeId)
+        || isFavoriteCounterChange(recipeId)
       );
       allow delete: if request.auth != null
         && resource.data.userId == request.auth.uid;
