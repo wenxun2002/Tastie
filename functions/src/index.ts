@@ -18,13 +18,190 @@
 
 import type {InlineDataPart, Part, Schema} from "@google/generative-ai";
 import {GoogleGenerativeAI, SchemaType} from "@google/generative-ai";
+import {initializeApp} from "firebase-admin/app";
+import type {DocumentData, Query} from "firebase-admin/firestore";
+import {FieldValue, Timestamp, getFirestore} from "firebase-admin/firestore";
 import {setGlobalOptions} from "firebase-functions";
 import {HttpsError, onCall} from "firebase-functions/https";
 import * as logger from "firebase-functions/logger";
+import {
+  onDocumentCreated,
+  onDocumentDeleted,
+  onDocumentUpdated,
+} from "firebase-functions/v2/firestore";
 
 export {getWeatherContext} from "./weatherContext";
 
 setGlobalOptions({maxInstances: 10});
+initializeApp();
+
+const db = getFirestore();
+const MYT_OFFSET_MS = 8 * 60 * 60 * 1000;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+const USERS_COLLECTION = "users";
+const RECIPES_COLLECTION = "recipes";
+const REPORTS_COLLECTION = "reports";
+const METRICS_DOC_PATH = "admin_metrics/dashboard_overview";
+const FIRESTORE_TRIGGER_OPTS = {region: "asia-southeast1"};
+
+type DashboardSnapshot = {
+  totalUsers: number;
+  totalPosts: number;
+  pendingReports: number;
+  bannedUsers: number;
+  todayRecipes: number;
+  todayHourlyRecipeCounts: number[];
+  last7DailyRecipeCounts: number[];
+};
+
+type MytDateParts = {
+  year: number;
+  month: number;
+  day: number;
+  hour: number;
+};
+
+/**
+ * Converts a UTC instant to Malaysia calendar parts (fixed +8h, no DST).
+ * @param {Date} utcDate Instant in UTC.
+ * @return {MytDateParts} Year/month/day/hour in MYT.
+ */
+function toMytDateParts(utcDate: Date): MytDateParts {
+  const myt = new Date(utcDate.getTime() + MYT_OFFSET_MS);
+  return {
+    year: myt.getUTCFullYear(),
+    month: myt.getUTCMonth(),
+    day: myt.getUTCDate(),
+    hour: myt.getUTCHours(),
+  };
+}
+
+/**
+ * Serializes a MYT calendar day for bucket indexing.
+ * @param {Date} utcDate Document timestamp interpreted as UTC.
+ * @return {number} UTC millis at MYT midnight for that local day.
+ */
+function mytDaySerial(utcDate: Date): number {
+  const p = toMytDateParts(utcDate);
+  return Date.UTC(p.year, p.month, p.day);
+}
+
+/**
+ * MYT "today" window expressed in UTC for Firestore range queries.
+ * @param {Date} nowUtc Current instant in UTC.
+ * @return {{startUtc: Date, endUtc: Date}} Inclusive start, exclusive end.
+ */
+function utcBoundsForMytToday(nowUtc: Date): {startUtc: Date; endUtc: Date} {
+  const p = toMytDateParts(nowUtc);
+  const startUtcMs = Date.UTC(p.year, p.month, p.day) - MYT_OFFSET_MS;
+  return {
+    startUtc: new Date(startUtcMs),
+    endUtc: new Date(startUtcMs + DAY_MS),
+  };
+}
+
+/**
+ * Runs a Firestore aggregate count query.
+ * @param {Query<DocumentData>} query Query whose rows should be counted.
+ * @return {Promise<number>} Document count.
+ */
+async function countQuery(query: Query<DocumentData>): Promise<number> {
+  const snap = await query.count().get();
+  return snap.data().count;
+}
+
+/**
+ * Reads createdAt from a stored document map.
+ * @param {DocumentData} data Firestore document fields.
+ * @return {Date | null} Parsed instant or null if missing/invalid.
+ */
+function extractCreatedAt(data: DocumentData): Date | null {
+  const raw = data["createdAt"];
+  if (raw instanceof Timestamp) {
+    return raw.toDate();
+  }
+  if (raw instanceof Date) {
+    return raw;
+  }
+  return null;
+}
+
+/**
+ * Recomputes dashboard counters and writes `admin_metrics/dashboard_overview`.
+ * @return {Promise<void>} Resolves when the metrics doc is updated.
+ */
+async function recomputeDashboardMetrics(): Promise<void> {
+  const nowUtc = new Date();
+  const todayBounds = utcBoundsForMytToday(nowUtc);
+  const weekStartUtc = new Date(todayBounds.startUtc.getTime() - 6 * DAY_MS);
+  const todaySerial = mytDaySerial(nowUtc);
+  const weekStartSerial = todaySerial - 6 * DAY_MS;
+
+  const usersCol = db.collection(USERS_COLLECTION);
+  const recipesCol = db.collection(RECIPES_COLLECTION);
+  const reportsCol = db.collection(REPORTS_COLLECTION);
+
+  const [
+    totalUsers,
+    totalPosts,
+    totalReports,
+    resolvedReports,
+    bannedUsers,
+    todayRecipes,
+    recipeDocsLast7Days,
+  ] = await Promise.all([
+    countQuery(usersCol),
+    countQuery(recipesCol),
+    countQuery(reportsCol),
+    countQuery(reportsCol.where("status", "==", "resolved")),
+    countQuery(usersCol.where("status", "==", "banned")),
+    countQuery(
+      recipesCol
+        .where("createdAt", ">=", Timestamp.fromDate(todayBounds.startUtc))
+        .where("createdAt", "<", Timestamp.fromDate(todayBounds.endUtc)),
+    ),
+    recipesCol
+      .where("createdAt", ">=", Timestamp.fromDate(weekStartUtc))
+      .where("createdAt", "<", Timestamp.fromDate(todayBounds.endUtc))
+      .get(),
+  ]);
+
+  const hourly = Array<number>(24).fill(0);
+  const weekly = Array<number>(7).fill(0);
+
+  for (const doc of recipeDocsLast7Days.docs) {
+    const createdAt = extractCreatedAt(doc.data());
+    if (!createdAt) continue;
+
+    const myt = toMytDateParts(createdAt);
+    const serial = Date.UTC(myt.year, myt.month, myt.day);
+    const dayIndex = Math.floor((serial - weekStartSerial) / DAY_MS);
+    if (dayIndex < 0 || dayIndex >= 7) continue;
+
+    weekly[dayIndex] = weekly[dayIndex] + 1;
+    if (dayIndex === 6 && myt.hour >= 0 && myt.hour < 24) {
+      hourly[myt.hour] = hourly[myt.hour] + 1;
+    }
+  }
+
+  const pendingReports = Math.max(0, totalReports - resolvedReports);
+  const snapshot: DashboardSnapshot = {
+    totalUsers,
+    totalPosts,
+    pendingReports,
+    bannedUsers,
+    todayRecipes,
+    todayHourlyRecipeCounts: hourly,
+    last7DailyRecipeCounts: weekly,
+  };
+
+  await db.doc(METRICS_DOC_PATH).set({
+    ...snapshot,
+    timezone: "Asia/Kuala_Lumpur",
+    updatedAt: FieldValue.serverTimestamp(),
+  }, {merge: true});
+}
 
 /** `gemini-1.5-flash` is often unavailable (404); use a current Flash model. */
 const DEFAULT_GEMINI_MODEL = "gemini-2.0-flash";
@@ -345,5 +522,95 @@ export const smartGenerate = onCall(
       logger.error("smartGenerate failed", {error: message});
       throw new HttpsError("internal", `Smart Generate failed: ${message}`);
     }
+  },
+);
+
+export const refreshDashboardMetricsOnUserCreate = onDocumentCreated(
+  {
+    ...FIRESTORE_TRIGGER_OPTS,
+    document: `${USERS_COLLECTION}/{docId}`,
+  },
+  async () => {
+    await recomputeDashboardMetrics();
+  },
+);
+
+export const refreshDashboardMetricsOnUserDelete = onDocumentDeleted(
+  {
+    ...FIRESTORE_TRIGGER_OPTS,
+    document: `${USERS_COLLECTION}/{docId}`,
+  },
+  async () => {
+    await recomputeDashboardMetrics();
+  },
+);
+
+export const refreshDashboardMetricsOnUserUpdate = onDocumentUpdated(
+  {
+    ...FIRESTORE_TRIGGER_OPTS,
+    document: `${USERS_COLLECTION}/{docId}`,
+  },
+  async () => {
+    await recomputeDashboardMetrics();
+  },
+);
+
+export const refreshDashboardMetricsOnRecipeCreate = onDocumentCreated(
+  {
+    ...FIRESTORE_TRIGGER_OPTS,
+    document: `${RECIPES_COLLECTION}/{docId}`,
+  },
+  async () => {
+    await recomputeDashboardMetrics();
+  },
+);
+
+export const refreshDashboardMetricsOnRecipeDelete = onDocumentDeleted(
+  {
+    ...FIRESTORE_TRIGGER_OPTS,
+    document: `${RECIPES_COLLECTION}/{docId}`,
+  },
+  async () => {
+    await recomputeDashboardMetrics();
+  },
+);
+
+export const refreshDashboardMetricsOnRecipeUpdate = onDocumentUpdated(
+  {
+    ...FIRESTORE_TRIGGER_OPTS,
+    document: `${RECIPES_COLLECTION}/{docId}`,
+  },
+  async () => {
+    await recomputeDashboardMetrics();
+  },
+);
+
+export const refreshDashboardMetricsOnReportCreate = onDocumentCreated(
+  {
+    ...FIRESTORE_TRIGGER_OPTS,
+    document: `${REPORTS_COLLECTION}/{docId}`,
+  },
+  async () => {
+    await recomputeDashboardMetrics();
+  },
+);
+
+export const refreshDashboardMetricsOnReportDelete = onDocumentDeleted(
+  {
+    ...FIRESTORE_TRIGGER_OPTS,
+    document: `${REPORTS_COLLECTION}/{docId}`,
+  },
+  async () => {
+    await recomputeDashboardMetrics();
+  },
+);
+
+export const refreshDashboardMetricsOnReportUpdate = onDocumentUpdated(
+  {
+    ...FIRESTORE_TRIGGER_OPTS,
+    document: `${REPORTS_COLLECTION}/{docId}`,
+  },
+  async () => {
+    await recomputeDashboardMetrics();
   },
 );
