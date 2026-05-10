@@ -11,6 +11,7 @@ import 'package:tastie/pages/me_page/settings_screen.dart';
 import 'package:tastie/repositories/firestore_recipe_repository.dart';
 import 'package:tastie/repositories/recipe_engagement_repository.dart';
 import 'package:tastie/models/recipe_firestore.dart';
+import 'package:tastie/services/recipe_analytics_service.dart';
 
 class MePage extends StatefulWidget {
   const MePage({super.key});
@@ -402,7 +403,11 @@ class _MePageState extends State<MePage> {
                 onTap: () async {
                   final result = await Get.toNamed(
                     Pages.indexDetail,
-                    arguments: {"id": post.id},
+                    arguments: <String, dynamic>{
+                      'id': post.id,
+                      'recordExploreDetailOpen': true,
+                      'recipeClickSource': RecipeClickSource.normalBrowse,
+                    },
                   );
                   if (!context.mounted) return;
                   if (result == true) {

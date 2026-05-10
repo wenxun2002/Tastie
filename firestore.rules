@@ -69,5 +69,26 @@ service cloud.firestore {
       allow read: if isAdmin();
       allow write: if false;
     }
+
+    // --- Recipe click events (append-only ML telemetry; aggregation via Cloud Functions) ---
+    // Note: `FieldValue.serverTimestamp()` may not appear in `keys()` during rule
+    // evaluation, so we allow 3–5 key shapes (with/without timestamp and weather).
+    match /recipe_click_events/{eventId} {
+      allow create: if isSignedIn()
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.recipeId is string
+        && request.resource.data.clickSource is string
+        && request.resource.data.clickSource in ['weather_promoted', 'weather_notpromoted', 'normal_browse', 'search']
+        && (
+             request.resource.data.keys().hasOnly(['recipeId', 'userId', 'clickSource'])
+          || request.resource.data.keys().hasOnly(['recipeId', 'userId', 'clickSource', 'timestamp'])
+          || request.resource.data.keys().hasOnly(['recipeId', 'userId', 'clickSource', 'currentWeatherCode'])
+          || request.resource.data.keys().hasOnly(['recipeId', 'userId', 'clickSource', 'timestamp', 'currentWeatherCode'])
+           )
+        && (!request.resource.data.keys().hasAny(['currentWeatherCode'])
+            || request.resource.data.currentWeatherCode is string);
+      allow read: if isAdmin();
+      allow update, delete: if false;
+    }
   }
 }

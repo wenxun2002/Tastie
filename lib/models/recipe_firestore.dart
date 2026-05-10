@@ -1,3 +1,5 @@
+import 'package:tastie/models/recipe_click_metrics.dart';
+
 /// Represents a recipe document in Firestore `recipes` collection.
 /// Used when creating and reading recipes (Create → Firestore, My Recipe → list/detail).
 class RecipeFirestore {
@@ -17,7 +19,7 @@ class RecipeFirestore {
     required this.favCount,
     required this.commentCount,
     this.status,
-    this.clicked = 0,
+    this.clickMetrics = RecipeClickMetrics.zero,
     this.createdAt,
   });
 
@@ -40,8 +42,8 @@ class RecipeFirestore {
   final int commentCount;
   /// Admin moderation: `active` / `banned`. Null/empty treated as active (legacy docs).
   final String? status;
-  /// Implicit feedback: Explore 详情打开次数（`FieldValue.increment` 维护）。
-  final int clicked;
+  /// Click breakdown (`click_metrics`). Maintained by Cloud Functions from `recipe_click_events`.
+  final RecipeClickMetrics clickMetrics;
   /// Firestore Timestamp or milliseconds since epoch. Null when creating (server sets it).
   final dynamic createdAt;
 
@@ -67,12 +69,29 @@ class RecipeFirestore {
       'favCount': favCount,
       'commentCount': commentCount,
       if (status != null) 'status': status,
-      'clicked': clicked,
+      'click_metrics': clickMetrics.toFirestoreMap(),
       if (createdAt != null) 'createdAt': createdAt,
     };
   }
 
   Map<String, dynamic> toFirestore() => toJson();
+
+  static RecipeClickMetrics _parseClickMetrics(Map<String, dynamic> data) {
+    final raw = data['click_metrics'];
+    if (raw is Map) {
+      return RecipeClickMetrics.fromFirestoreMap(
+        Map<String, dynamic>.from(raw),
+      );
+    }
+    final legacy = (data['clicked'] as num?)?.toInt() ?? 0;
+    return RecipeClickMetrics(
+      weatherPromoted: 0,
+      weatherNotPromoted: 0,
+      normalBrowse: 0,
+      search: 0,
+      total: legacy,
+    );
+  }
 
   /// Build from Firestore document (doc.id + doc.data()).
   factory RecipeFirestore.fromFirestore(String docId, Map<String, dynamic> data) {
@@ -105,7 +124,7 @@ class RecipeFirestore {
       favCount: (data['favCount'] as num?)?.toInt() ?? 0,
       commentCount: (data['commentCount'] as num?)?.toInt() ?? 0,
       status: data['status'] as String?,
-      clicked: (data['clicked'] as num?)?.toInt() ?? 0,
+      clickMetrics: _parseClickMetrics(data),
       createdAt: data['createdAt'],
     );
   }

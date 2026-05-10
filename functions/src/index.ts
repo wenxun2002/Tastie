@@ -42,6 +42,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const USERS_COLLECTION = "users";
 const RECIPES_COLLECTION = "recipes";
 const REPORTS_COLLECTION = "reports";
+const RECIPE_CLICK_EVENTS_COLLECTION = "recipe_click_events";
 const METRICS_DOC_PATH = "admin_metrics/dashboard_overview";
 const FIRESTORE_TRIGGER_OPTS = {region: "asia-southeast1"};
 
@@ -612,5 +613,78 @@ export const refreshDashboardMetricsOnReportUpdate = onDocumentUpdated(
   },
   async () => {
     await recomputeDashboardMetrics();
+  },
+);
+
+const CLICK_SOURCE_VALUES = new Set([
+  "weather_promoted",
+  "weather_notpromoted",
+  "normal_browse",
+  "search",
+]);
+
+/**
+ * Seeds `click_metrics` from legacy `clicked` when missing, then increments
+ * the bucket + total for ML telemetry (written by mobile app).
+ */
+export const aggregateRecipeClickMetricsOnEventCreate = onDocumentCreated(
+  {
+    ...FIRESTORE_TRIGGER_OPTS,
+    document: `${RECIPE_CLICK_EVENTS_COLLECTION}/{eventId}`,
+  },
+  async (event) => {
+    const snap = event.data;
+    if (!snap) {
+      return;
+    }
+    const recipeId = snap.get("recipeId") as string | undefined;
+    const clickSource = snap.get("clickSource") as string | undefined;
+    if (!recipeId || !clickSource || !CLICK_SOURCE_VALUES.has(clickSource)) {
+      logger.warn("recipe_click_events: skip invalid payload", {
+        recipeId,
+        clickSource,
+      });
+      return;
+    }
+
+    const recipeRef = db.collection(RECIPES_COLLECTION).doc(recipeId);
+    const recipeSnap = await recipeRef.get();
+    if (!recipeSnap.exists) {
+      logger.warn("recipe_click_events: recipe not found", {recipeId});
+      return;
+    }
+
+    const recipeData = recipeSnap.data() ?? {};
+    const cm = recipeData["click_metrics"];
+    const needsSeed =
+      cm === undefined || cm === null || typeof cm !== "object";
+
+    if (needsSeed) {
+      const rawLegacy = recipeData["clicked"];
+      let legacyClicked = 0;
+      if (typeof rawLegacy === "number") {
+        legacyClicked = rawLegacy;
+      } else if (typeof rawLegacy === "string") {
+        legacyClicked = Number.parseInt(rawLegacy, 10) || 0;
+      }
+
+      await recipeRef.set(
+        {
+          click_metrics: {
+            weather_promoted: 0,
+            weather_notpromoted: 0,
+            normal_browse: 0,
+            search: 0,
+            total: legacyClicked,
+          },
+        },
+        {merge: true},
+      );
+    }
+
+    await recipeRef.update({
+      [`click_metrics.${clickSource}`]: FieldValue.increment(1),
+      "click_metrics.total": FieldValue.increment(1),
+    });
   },
 );

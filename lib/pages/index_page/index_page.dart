@@ -8,6 +8,8 @@ import 'package:tastie/pages/index_page/widgets/card_item_skeleton.dart';
 import 'package:tastie/pages/index_page/widgets/weather_banner.dart';
 import 'package:tastie/pages/index_page/widgets/weather_selector.dart';
 import 'package:tastie/pages/Search_Page/search_page.dart';
+import 'package:tastie/services/recipe_analytics_service.dart';
+import 'package:tastie/utils/recipe_weather_promoted_match.dart';
 import 'index_controller.dart';
 
 class IndexPage extends StatelessWidget {
@@ -50,7 +52,11 @@ class IndexPage extends StatelessWidget {
                     ),
                   ),
                   IconButton(
-                    icon: const Icon(Icons.search, size: 30, color: Colors.black),
+                    icon: const Icon(
+                      Icons.search,
+                      size: 30,
+                      color: Colors.black,
+                    ),
                     onPressed: () {
                       Get.to(() => const SearchPage());
                     },
@@ -180,11 +186,29 @@ class _ExplorePageState extends State<_ExplorePageStateful> {
                       cardData: post,
                       isLiked: widget.controller.isRecipeLiked(post.id),
                       onTap: () async {
+                        final RecipeClickSource exploreClickSource =
+                            recipeTagsIntersectPromotedTags(
+                              post.tags,
+                              widget.controller.exploreFilterPromotedTags,
+                            )
+                            ? RecipeClickSource.weatherPromoted
+                            : RecipeClickSource.weatherNotPromoted;
                         final result = await Get.toNamed(
                           Pages.indexDetail,
                           arguments: <String, dynamic>{
                             'id': post.id,
                             'recordExploreDetailOpen': true,
+                            'recipeClickSource': exploreClickSource,
+                            if (widget
+                                    .controller
+                                    .currentWeather
+                                    .conditionCode !=
+                                null)
+                              'currentWeatherCode': widget
+                                  .controller
+                                  .currentWeather
+                                  .conditionCode
+                                  .toString(),
                           },
                         );
                         await widget.controller.reloadLikedRecipeIds();
@@ -199,8 +223,9 @@ class _ExplorePageState extends State<_ExplorePageStateful> {
                       },
                     );
                   },
-                  childCount:
-                      widget.controller.isInitialLoading ? 8 : widget.controller.data.length,
+                  childCount: widget.controller.isInitialLoading
+                      ? 8
+                      : widget.controller.data.length,
                 ),
               ),
 
@@ -250,10 +275,7 @@ class _ExplorePageState extends State<_ExplorePageStateful> {
         child: Center(
           child: Text(
             'No more posts',
-            style: TextStyle(
-              fontSize: 13,
-              color: Theme.of(context).hintColor,
-            ),
+            style: TextStyle(fontSize: 13, color: Theme.of(context).hintColor),
           ),
         ),
       );
@@ -264,7 +286,8 @@ class _ExplorePageState extends State<_ExplorePageStateful> {
 
   Future<void> _precacheAnyImage(BuildContext context, String url) async {
     final ImageProvider provider;
-    final isNetwork = url.startsWith('http://') ||
+    final isNetwork =
+        url.startsWith('http://') ||
         url.startsWith('https://') ||
         url.startsWith('//');
     provider = isNetwork ? NetworkImage(url) : AssetImage(url);

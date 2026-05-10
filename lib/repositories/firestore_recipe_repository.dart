@@ -19,7 +19,13 @@ class FirestoreRecipeRepository {
     map['createdAt'] = FieldValue.serverTimestamp();
     // Ensure new recipes follow the latest admin schema.
     map.putIfAbsent('status', () => 'active');
-    map.putIfAbsent('clicked', () => 0);
+    map.putIfAbsent('click_metrics', () => const <String, dynamic>{
+          'weather_promoted': 0,
+          'weather_notpromoted': 0,
+          'normal_browse': 0,
+          'search': 0,
+          'total': 0,
+        });
     // Optional compatibility: admin also reads these fields directly.
     map.putIfAbsent('authorUid', () => recipe.userId);
 

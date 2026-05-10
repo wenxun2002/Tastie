@@ -14,6 +14,7 @@ import 'package:tastie/repositories/firestore_index_repository.dart';
 import 'package:tastie/data/weather_category.dart';
 import 'package:tastie/services/weather_context_service.dart';
 import 'package:tastie/utils/weather_classifier.dart';
+import 'package:tastie/services/recipe_analytics_service.dart';
 
 /// 非 neutral 天气下 Explore 的瀑布降级：promoted → neutral → suppressed → 结束。
 enum FetchStage { promoted, neutral, suppressed, done }
@@ -541,12 +542,19 @@ class IndexController extends GetxController
     update(['post_list']);
   }
 
-  void openIndexDetailPage(String id) {
+  void openIndexDetailPage(
+    String id, {
+    RecipeClickSource clickSource = RecipeClickSource.weatherNotPromoted,
+    String? currentWeatherCode,
+  }) {
     Get.toNamed(
       Pages.indexDetail,
       arguments: <String, dynamic>{
         'id': id,
         'recordExploreDetailOpen': true,
+        'recipeClickSource': clickSource,
+        if (currentWeatherCode != null && currentWeatherCode.isNotEmpty)
+          'currentWeatherCode': currentWeatherCode,
       },
     );
   }

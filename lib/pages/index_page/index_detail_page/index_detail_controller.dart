@@ -13,8 +13,12 @@ import 'package:tastie/pages/auth/auth_controller.dart';
 import 'package:tastie/pages/report/report_reason_page.dart';
 import 'package:tastie/repositories/firestore_recipe_repository.dart';
 import 'package:tastie/repositories/recipe_engagement_repository.dart';
+import 'package:tastie/services/recipe_analytics_service.dart';
 import 'package:tastie/services/recipe_storage_service.dart';
+import 'package:tastie/data/tag_policy.dart';
 import 'package:tastie/pages/index_page/index_controller.dart';
+import 'package:tastie/utils/recipe_weather_promoted_match.dart';
+import 'package:tastie/utils/weather_classifier.dart';
 
 class IndexDetailController extends GetxController {
   late RecipeFirestore recipe;
@@ -124,7 +128,7 @@ class IndexDetailController extends GetxController {
       if (!isFail && id.isNotEmpty) {
         _startRecipeStream();
         _bindUserEngagementStreams(FirebaseAuth.instance.currentUser?.uid);
-        _maybeRecordExploreDetailClick();
+        _maybeRecordRecipeClick();
       } else {
         _recipeSub?.cancel();
         _recipeSub = null;
@@ -134,12 +138,70 @@ class IndexDetailController extends GetxController {
     }
   }
 
-  void _maybeRecordExploreDetailClick() {
+  RecipeClickSource? _recipeClickSourceFromArgs(dynamic args) {
+    if (args is! Map) return null;
+    final dynamic v = args['recipeClickSource'];
+    if (v is RecipeClickSource) return v;
+    if (v is String) {
+      for (final s in RecipeClickSource.values) {
+        if (s.firestoreValue == v) return s;
+      }
+    }
+    return null;
+  }
+
+  /// Explore-only: classify promoted vs not using Firestore [recipe.tags] and the
+  /// same promoted list as the feed ([IndexController.exploreFilterPromotedTags],
+  /// falling back to [getTagPolicy] for current selector weather).
+  RecipeClickSource _resolveExploreWeatherClickSource() {
+    List<String> promoted = const [];
+    try {
+      final IndexController idx = Get.find<IndexController>();
+      promoted = idx.exploreFilterPromotedTags;
+      if (promoted.isEmpty) {
+        promoted = List<String>.from(
+          getTagPolicy(classifyWeather(idx.selectorWeather)).promoted,
+        );
+      }
+    } catch (_) {
+      promoted = const [];
+    }
+    final bool hit =
+        recipeTagsIntersectPromotedTags(recipe.tags, promoted);
+    return hit
+        ? RecipeClickSource.weatherPromoted
+        : RecipeClickSource.weatherNotPromoted;
+  }
+
+  void _maybeRecordRecipeClick() {
     final dynamic args = Get.arguments;
     if (args is! Map || args['recordExploreDetailOpen'] != true) return;
     final User? user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
-    unawaited(_engagement.incrementRecipeClicked(id).catchError((_) {}));
+    RecipeClickSource? source = _recipeClickSourceFromArgs(args);
+    if (source == null) return;
+
+    // Override CardData-based routing with authoritative recipe.tags + promoted list.
+    if (source == RecipeClickSource.weatherPromoted ||
+        source == RecipeClickSource.weatherNotPromoted) {
+      source = _resolveExploreWeatherClickSource();
+    }
+
+    final String? weatherCode = args['currentWeatherCode'] as String?;
+    final analytics = RecipeAnalyticsService();
+    unawaited(
+      analytics
+          .logRecipeClick(
+            recipeId: id,
+            userId: user.uid,
+            source: source,
+            currentWeatherCode:
+                (weatherCode != null && weatherCode.isNotEmpty) ? weatherCode : null,
+          )
+          .catchError((Object e) {
+            debugPrint('RecipeAnalytics logRecipeClick failed: $e');
+          }),
+    );
   }
 
   void getCommentList() {
