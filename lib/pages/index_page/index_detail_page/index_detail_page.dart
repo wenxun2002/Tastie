@@ -220,6 +220,21 @@ class _IndexDetailPageState extends State<IndexDetailPage>
   }
 
   Widget buildImageSwiper(IndexDetailController controller) {
+    if (controller.recipe.imageUrls.isEmpty) {
+      return SizedBox(
+        height: Get.height * 2 / 3,
+        child: Container(
+          color: ColorPlate.background,
+          alignment: Alignment.center,
+          child: const Icon(
+            Icons.image_not_supported_outlined,
+            size: 64,
+            color: ColorPlate.textSecondary,
+          ),
+        ),
+      );
+    }
+
     return SizedBox(
       height: Get.height * 2 / 3,
       child: Swiper(
