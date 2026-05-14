@@ -1,0 +1,29 @@
+{
+  "name": "tastie",
+  "version": "1.0.0",
+  "private": true,
+  "description": "A new Flutter project.",
+  "main": "index.js",
+  "directories": {
+    "lib": "lib",
+    "test": "test"
+  },
+  "scripts": {
+    "test:firestore-rules": "node --test test/firestore_rules.test.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/wenxun2002/Tastie.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/wenxun2002/Tastie/issues"
+  },
+  "homepage": "https://github.com/wenxun2002/Tastie#readme",
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "^5.0.1",
+    "firebase": "^12.13.0"
+  }
+}
