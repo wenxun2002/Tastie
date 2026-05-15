@@ -1,22 +1,131 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && request.auth.token.admin == true;
+    }
+
+    function changedKeys() {
+      return request.resource.data.diff(resource.data).affectedKeys();
+    }
+
+    function recipePath(recipeId) {
+      return /databases/$(database)/documents/recipes/$(recipeId);
+    }
+
+    function likePath(recipeId) {
+      return /databases/$(database)/documents/users/$(request.auth.uid)/likes/$(recipeId);
+    }
+
+    function collectionPath(recipeId) {
+      return /databases/$(database)/documents/users/$(request.auth.uid)/collections/$(recipeId);
+    }
+
+    function validRecipeCreate() {
+      return isSignedIn()
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.authorUid == request.auth.uid
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.status == 'active'
+        && request.resource.data.likeCount == 0
+        && request.resource.data.favCount == 0
+        && request.resource.data.commentCount == 0;
+    }
+
+    function validAuthorRecipeUpdate() {
+      return resource.data.userId == request.auth.uid
+        && !changedKeys().hasAny([
+          'userId',
+          'authorUid',
+          'createdAt',
+          'likeCount',
+          'favCount',
+          'commentCount',
+          'status',
+        ]);
+    }
+
+    function validLikeCountUpdate(recipeId) {
+      return changedKeys().hasOnly(['likeCount'])
+        && request.resource.data.likeCount >= 0
+        && (
+          (
+            !exists(likePath(recipeId))
+            && existsAfter(likePath(recipeId))
+            && request.resource.data.likeCount == resource.data.likeCount + 1
+          )
+          || (
+            exists(likePath(recipeId))
+            && !existsAfter(likePath(recipeId))
+            && request.resource.data.likeCount == resource.data.likeCount - 1
+          )
+        );
+    }
+
+    function validFavCountUpdate(recipeId) {
+      return changedKeys().hasOnly(['favCount'])
+        && request.resource.data.favCount >= 0
+        && (
+          (
+            !exists(collectionPath(recipeId))
+            && existsAfter(collectionPath(recipeId))
+            && request.resource.data.favCount == resource.data.favCount + 1
+          )
+          || (
+            exists(collectionPath(recipeId))
+            && !existsAfter(collectionPath(recipeId))
+            && request.resource.data.favCount == resource.data.favCount - 1
+          )
+        );
+    }
+
+    function validLikeCreate(recipeId) {
+      return request.resource.data.keys().hasOnly(['recipeId', 'createdAt'])
+        && request.resource.data.recipeId == recipeId
+        && request.resource.data.createdAt == request.time
+        && exists(recipePath(recipeId))
+        && getAfter(recipePath(recipeId)).data.likeCount ==
+             get(recipePath(recipeId)).data.likeCount + 1;
+    }
+
+    function validLikeDelete(recipeId) {
+      return exists(recipePath(recipeId))
+        && existsAfter(recipePath(recipeId))
+        && getAfter(recipePath(recipeId)).data.likeCount ==
+             get(recipePath(recipeId)).data.likeCount - 1;
+    }
+
+    function validCollectionCreate(recipeId) {
+      return request.resource.data.keys().hasOnly(['recipeId', 'createdAt'])
+        && request.resource.data.recipeId == recipeId
+        && request.resource.data.createdAt == request.time
+        && exists(recipePath(recipeId))
+        && getAfter(recipePath(recipeId)).data.favCount ==
+             get(recipePath(recipeId)).data.favCount + 1;
+    }
+
+    function validCollectionDelete(recipeId) {
+      return exists(recipePath(recipeId))
+        && existsAfter(recipePath(recipeId))
+        && getAfter(recipePath(recipeId)).data.favCount ==
+             get(recipePath(recipeId)).data.favCount - 1;
+    }
 
     // --- Recipes (feed + engagement counters on same doc) ---
     match /recipes/{recipeId} {
       allow read: if true;
-      allow create: if request.auth != null
-        && request.resource.data.userId == request.auth.uid;
-      // Author: full edit. Any signed-in user: counter increments (engagement).
-      // Admin app (client SDK): status-only merge for ban/unban.
-      allow update: if request.auth != null && (
-        resource.data.userId == request.auth.uid
-        || request.resource.data.diff(resource.data).affectedKeys()
-             .hasOnly(['likeCount', 'favCount'])
-        || request.resource.data.diff(resource.data).affectedKeys()
-             .hasOnly(['status'])
+      allow create: if validRecipeCreate();
+      allow update: if isSignedIn() && (
+        validAuthorRecipeUpdate()
+        || validLikeCountUpdate(recipeId)
+        || validFavCountUpdate(recipeId)
+        || (isAdmin() && changedKeys().hasOnly(['status']))
       );
-      allow delete: if request.auth != null
+      allow delete: if isSignedIn()
         && resource.data.userId == request.auth.uid;
     }
 
@@ -27,13 +136,27 @@ service cloud.firestore {
         && request.auth.uid == userId;
 
       match /likes/{recipeId} {
-        allow read, write: if request.auth != null
+        allow read: if isSignedIn()
           && request.auth.uid == userId;
+        allow create: if isSignedIn()
+          && request.auth.uid == userId
+          && validLikeCreate(recipeId);
+        allow update: if false;
+        allow delete: if isSignedIn()
+          && request.auth.uid == userId
+          && validLikeDelete(recipeId);
       }
 
       match /collections/{recipeId} {
-        allow read, write: if request.auth != null
+        allow read: if isSignedIn()
           && request.auth.uid == userId;
+        allow create: if isSignedIn()
+          && request.auth.uid == userId
+          && validCollectionCreate(recipeId);
+        allow update: if false;
+        allow delete: if isSignedIn()
+          && request.auth.uid == userId
+          && validCollectionDelete(recipeId);
       }
     }
 
