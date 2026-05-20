@@ -9,6 +9,7 @@ const {
   initializeTestEnvironment,
 } = require('@firebase/rules-unit-testing');
 const {
+  deleteDoc,
   doc,
   increment,
   runTransaction,
@@ -143,6 +144,36 @@ describe('firestore.rules', {timeout: 30000}, () => {
       updateDoc(doc(db, 'recipes', 'recipe1'), {
         likeCount: increment(1),
       }),
+    );
+  });
+
+  it('rejects standalone engagement marker writes', async () => {
+    await seedRecipe();
+    const db = authedDb('fan');
+
+    await assertFails(
+      setDoc(doc(db, 'users', 'fan', 'likes', 'recipe1'), {
+        recipeId: 'recipe1',
+        createdAt: serverTimestamp(),
+      }),
+    );
+    await assertFails(
+      setDoc(doc(db, 'users', 'fan', 'collections', 'recipe1'), {
+        recipeId: 'recipe1',
+        createdAt: serverTimestamp(),
+      }),
+    );
+
+    await seedRecipe('liked-recipe', {likeCount: 1});
+    await seedRecipe('collected-recipe', {favCount: 1});
+    await seedEngagementDoc('likes', 'fan', 'liked-recipe');
+    await seedEngagementDoc('collections', 'fan', 'collected-recipe');
+
+    await assertFails(
+      deleteDoc(doc(db, 'users', 'fan', 'likes', 'liked-recipe')),
+    );
+    await assertFails(
+      deleteDoc(doc(db, 'users', 'fan', 'collections', 'collected-recipe')),
     );
   });
 

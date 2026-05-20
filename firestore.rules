@@ -21,6 +21,35 @@ service cloud.firestore {
       return /databases/$(database)/documents/users/$(request.auth.uid)/collections/$(recipeId);
     }
 
+    function recipePath(recipeId) {
+      return /databases/$(database)/documents/recipes/$(recipeId);
+    }
+
+    function validEngagementDoc(recipeId) {
+      return request.resource.data.recipeId == recipeId
+        && request.resource.data.keys().hasOnly(['recipeId', 'createdAt']);
+    }
+
+    function recipeLikeCountMovesBy(recipeId, delta) {
+      return exists(recipePath(recipeId))
+        && existsAfter(recipePath(recipeId))
+        && get(recipePath(recipeId)).data.likeCount is int
+        && getAfter(recipePath(recipeId)).data.likeCount is int
+        && getAfter(recipePath(recipeId)).data.likeCount >= 0
+        && getAfter(recipePath(recipeId)).data.likeCount
+            == get(recipePath(recipeId)).data.likeCount + delta;
+    }
+
+    function recipeFavCountMovesBy(recipeId, delta) {
+      return exists(recipePath(recipeId))
+        && existsAfter(recipePath(recipeId))
+        && get(recipePath(recipeId)).data.favCount is int
+        && getAfter(recipePath(recipeId)).data.favCount is int
+        && getAfter(recipePath(recipeId)).data.favCount >= 0
+        && getAfter(recipePath(recipeId)).data.favCount
+            == get(recipePath(recipeId)).data.favCount + delta;
+    }
+
     function hasEngagementDocAfter(path, recipeId) {
       return existsAfter(path)
         && getAfter(path).data.recipeId == recipeId
@@ -110,13 +139,29 @@ service cloud.firestore {
         && request.auth.uid == userId;
 
       match /likes/{recipeId} {
-        allow read, write: if signedIn()
+        allow read: if signedIn()
           && request.auth.uid == userId;
+        allow create: if signedIn()
+          && request.auth.uid == userId
+          && validEngagementDoc(recipeId)
+          && recipeLikeCountMovesBy(recipeId, 1);
+        allow update: if false;
+        allow delete: if signedIn()
+          && request.auth.uid == userId
+          && recipeLikeCountMovesBy(recipeId, -1);
       }
 
       match /collections/{recipeId} {
-        allow read, write: if signedIn()
+        allow read: if signedIn()
           && request.auth.uid == userId;
+        allow create: if signedIn()
+          && request.auth.uid == userId
+          && validEngagementDoc(recipeId)
+          && recipeFavCountMovesBy(recipeId, 1);
+        allow update: if false;
+        allow delete: if signedIn()
+          && request.auth.uid == userId
+          && recipeFavCountMovesBy(recipeId, -1);
       }
     }
 
