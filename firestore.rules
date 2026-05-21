@@ -1,46 +1,101 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return signedIn() && request.auth.token.admin == true;
+    }
+
+    function recipeChangedKeys() {
+      return request.resource.data.diff(resource.data).affectedKeys();
+    }
+
+    function recipeCounterUnchanged(field) {
+      return !recipeChangedKeys().hasAny([field]);
+    }
+
+    function recipeCounterChangesByOne(field) {
+      return request.resource.data[field] >= 0
+        && (request.resource.data[field] == resource.data[field] + 1
+          || request.resource.data[field] == resource.data[field] - 1);
+    }
+
+    function validEngagementCounterUpdate() {
+      return recipeChangedKeys().hasOnly(['likeCount', 'favCount'])
+        && (recipeCounterUnchanged('likeCount')
+          || recipeCounterChangesByOne('likeCount'))
+        && (recipeCounterUnchanged('favCount')
+          || recipeCounterChangesByOne('favCount'));
+    }
+
+    function validAuthorRecipeUpdate() {
+      return resource.data.userId == request.auth.uid
+        && !recipeChangedKeys().hasAny([
+          'userId',
+          'authorUid',
+          'status',
+          'likeCount',
+          'favCount',
+          'commentCount',
+          'createdAt',
+        ]);
+    }
+
+    function validRecipeCreate() {
+      return request.resource.data.userId == request.auth.uid
+        && request.resource.data.authorUid == request.auth.uid
+        && request.resource.data.status == 'active'
+        && request.resource.data.likeCount == 0
+        && request.resource.data.favCount == 0
+        && request.resource.data.commentCount == 0;
+    }
 
     // --- Recipes (feed + engagement counters on same doc) ---
     match /recipes/{recipeId} {
       allow read: if true;
-      allow create: if request.auth != null
-        && request.resource.data.userId == request.auth.uid;
-      // Author: full edit. Any signed-in user: counter increments (engagement).
-      // Admin app (client SDK): status-only merge for ban/unban.
-      allow update: if request.auth != null && (
-        resource.data.userId == request.auth.uid
-        || request.resource.data.diff(resource.data).affectedKeys()
-             .hasOnly(['likeCount', 'favCount'])
-        || request.resource.data.diff(resource.data).affectedKeys()
-             .hasOnly(['status'])
+      allow create: if signedIn() && validRecipeCreate();
+      // Author edits cannot reassign ownership, change moderation state, or
+      // tamper with aggregate counters. Status changes are admin-only.
+      allow update: if signedIn() && (
+        validAuthorRecipeUpdate()
+        || validEngagementCounterUpdate()
+        || (
+          isAdmin()
+          && recipeChangedKeys().hasOnly(['status'])
+          && (request.resource.data.status == 'active'
+            || request.resource.data.status == 'banned')
+        )
       );
-      allow delete: if request.auth != null
+      allow delete: if signedIn()
         && resource.data.userId == request.auth.uid;
     }
 
     // --- User profile + per-user likes / collections ---
     match /users/{userId} {
-      allow read: if true;
-      allow create, update: if request.auth != null
+      allow read: if signedIn()
+        && (request.auth.uid == userId || isAdmin());
+      allow create, update: if signedIn()
         && request.auth.uid == userId;
 
       match /likes/{recipeId} {
-        allow read, write: if request.auth != null
+        allow read, write: if signedIn()
           && request.auth.uid == userId;
       }
 
       match /collections/{recipeId} {
-        allow read, write: if request.auth != null
+        allow read, write: if signedIn()
           && request.auth.uid == userId;
       }
     }
 
-    // --- Reports (mobile creates; admin console reads with same auth) ---
+    // --- Reports (mobile creates; admins read) ---
     match /reports/{reportId} {
-      allow read: if request.auth != null;
-      allow create: if request.auth != null;
+      allow read: if isAdmin();
+      allow create: if signedIn()
+        && request.resource.data.reportedBy == request.auth.uid;
       allow update, delete: if false;
     }
 
