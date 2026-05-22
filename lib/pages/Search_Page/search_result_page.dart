@@ -13,6 +13,7 @@ import 'package:tastie/pages/index_page/widgets/card_item.dart';
 import 'package:tastie/pages/index_page/widgets/card_item_skeleton.dart';
 import 'package:tastie/repositories/firestore_recipe_repository.dart';
 import 'package:tastie/services/recipe_analytics_service.dart';
+import 'package:tastie/utils/recipe_click_weather_context.dart';
 
 class SearchResultPage extends StatefulWidget {
   const SearchResultPage({
@@ -294,12 +295,15 @@ class _SearchResultPageState extends State<SearchResultPage> {
                 cardData: ranked.toCardData(),
                 isLiked: false,
                 onTap: () {
+                  final weatherSnapshot = tryRecipeClickWeatherSnapshot();
                   Get.toNamed(
                     Pages.indexDetail,
                     arguments: <String, dynamic>{
                       'id': ranked.recipe.id,
                       'recordExploreDetailOpen': true,
                       'recipeClickSource': RecipeClickSource.search,
+                      if (weatherSnapshot != null && !weatherSnapshot.isEmpty)
+                        'weatherSnapshot': weatherSnapshot.toArgumentsMap(),
                     },
                   );
                 },

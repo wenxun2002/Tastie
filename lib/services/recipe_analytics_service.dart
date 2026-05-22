@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:tastie/models/recipe_click_weather_snapshot.dart';
 
 /// Machine-learning click attribution (mirrors Firestore `clickSource` strings).
 enum RecipeClickSource {
@@ -26,17 +27,21 @@ class RecipeAnalyticsService {
     required String recipeId,
     required String userId,
     required RecipeClickSource source,
-    String? currentWeatherCode,
+    RecipeClickWeatherSnapshot? weather,
   }) async {
     if (recipeId.isEmpty || userId.isEmpty) return;
 
-    await _db.collection(_collection).add(<String, dynamic>{
+    final payload = <String, dynamic>{
       'recipeId': recipeId,
       'userId': userId,
       'clickSource': source.firestoreValue,
       'timestamp': FieldValue.serverTimestamp(),
-      if (currentWeatherCode != null && currentWeatherCode.isNotEmpty)
-        'currentWeatherCode': currentWeatherCode,
-    });
+    };
+
+    if (weather != null && !weather.isEmpty) {
+      payload.addAll(weather.toFirestoreMap());
+    }
+
+    await _db.collection(_collection).add(payload);
   }
 }

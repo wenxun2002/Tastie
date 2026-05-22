@@ -12,6 +12,7 @@ import 'package:tastie/repositories/firestore_recipe_repository.dart';
 import 'package:tastie/repositories/recipe_engagement_repository.dart';
 import 'package:tastie/models/recipe_firestore.dart';
 import 'package:tastie/services/recipe_analytics_service.dart';
+import 'package:tastie/utils/recipe_click_weather_context.dart';
 
 class MePage extends StatefulWidget {
   const MePage({super.key});
@@ -401,12 +402,15 @@ class _MePageState extends State<MePage> {
                 cardData: post,
                 isLiked: forceLiked || likedIds.contains(post.id),
                 onTap: () async {
+                  final weatherSnapshot = tryRecipeClickWeatherSnapshot();
                   final result = await Get.toNamed(
                     Pages.indexDetail,
                     arguments: <String, dynamic>{
                       'id': post.id,
                       'recordExploreDetailOpen': true,
                       'recipeClickSource': RecipeClickSource.normalBrowse,
+                      if (weatherSnapshot != null && !weatherSnapshot.isEmpty)
+                        'weatherSnapshot': weatherSnapshot.toArgumentsMap(),
                     },
                   );
                   if (!context.mounted) return;

@@ -71,22 +71,36 @@ service cloud.firestore {
     }
 
     // --- Recipe click events (append-only ML telemetry; aggregation via Cloud Functions) ---
-    // Note: `FieldValue.serverTimestamp()` may not appear in `keys()` during rule
-    // evaluation, so we allow 3–5 key shapes (with/without timestamp and weather).
+    // Note: `FieldValue.serverTimestamp()` may not appear in `keys()` during rule evaluation.
+    function recipeClickEventKeysAllowed() {
+      return request.resource.data.keys().removeAll([
+        'recipeId', 'userId', 'clickSource', 'timestamp',
+        'locationName', 'weatherCategory',
+        'temperature', 'feelsLike', 'humidity', 'precipitation', 'conditionCode',
+        'currentWeatherCode'
+      ]).size() == 0;
+    }
+
+    function recipeClickEventWeatherFieldsValid() {
+      let d = request.resource.data;
+      return (!d.keys().hasAny(['locationName']) || d.locationName is string)
+        && (!d.keys().hasAny(['weatherCategory']) || d.weatherCategory is string)
+        && (!d.keys().hasAny(['temperature']) || d.temperature is number)
+        && (!d.keys().hasAny(['feelsLike']) || d.feelsLike is number)
+        && (!d.keys().hasAny(['humidity']) || d.humidity is number)
+        && (!d.keys().hasAny(['precipitation']) || d.precipitation is number)
+        && (!d.keys().hasAny(['conditionCode']) || d.conditionCode is int)
+        && (!d.keys().hasAny(['currentWeatherCode']) || d.currentWeatherCode is string);
+    }
+
     match /recipe_click_events/{eventId} {
       allow create: if isSignedIn()
         && request.resource.data.userId == request.auth.uid
         && request.resource.data.recipeId is string
         && request.resource.data.clickSource is string
         && request.resource.data.clickSource in ['weather_promoted', 'weather_notpromoted', 'normal_browse', 'search']
-        && (
-             request.resource.data.keys().hasOnly(['recipeId', 'userId', 'clickSource'])
-          || request.resource.data.keys().hasOnly(['recipeId', 'userId', 'clickSource', 'timestamp'])
-          || request.resource.data.keys().hasOnly(['recipeId', 'userId', 'clickSource', 'currentWeatherCode'])
-          || request.resource.data.keys().hasOnly(['recipeId', 'userId', 'clickSource', 'timestamp', 'currentWeatherCode'])
-           )
-        && (!request.resource.data.keys().hasAny(['currentWeatherCode'])
-            || request.resource.data.currentWeatherCode is string);
+        && recipeClickEventKeysAllowed()
+        && recipeClickEventWeatherFieldsValid();
       allow read: if isAdmin();
       allow update, delete: if false;
     }

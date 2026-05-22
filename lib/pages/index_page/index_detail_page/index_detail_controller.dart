@@ -13,7 +13,9 @@ import 'package:tastie/pages/auth/auth_controller.dart';
 import 'package:tastie/pages/report/report_reason_page.dart';
 import 'package:tastie/repositories/firestore_recipe_repository.dart';
 import 'package:tastie/repositories/recipe_engagement_repository.dart';
+import 'package:tastie/models/recipe_click_weather_snapshot.dart';
 import 'package:tastie/services/recipe_analytics_service.dart';
+import 'package:tastie/utils/recipe_click_weather_context.dart';
 import 'package:tastie/services/recipe_storage_service.dart';
 import 'package:tastie/data/tag_policy.dart';
 import 'package:tastie/pages/index_page/index_controller.dart';
@@ -187,7 +189,11 @@ class IndexDetailController extends GetxController {
       source = _resolveExploreWeatherClickSource();
     }
 
-    final String? weatherCode = args['currentWeatherCode'] as String?;
+    RecipeClickWeatherSnapshot? weather =
+        RecipeClickWeatherSnapshot.fromArgumentsMap(args);
+    if (weather.isEmpty) {
+      weather = tryRecipeClickWeatherSnapshot();
+    }
     final analytics = RecipeAnalyticsService();
     unawaited(
       analytics
@@ -195,8 +201,7 @@ class IndexDetailController extends GetxController {
             recipeId: id,
             userId: user.uid,
             source: source,
-            currentWeatherCode:
-                (weatherCode != null && weatherCode.isNotEmpty) ? weatherCode : null,
+            weather: weather != null && !weather.isEmpty ? weather : null,
           )
           .catchError((Object e) {
             debugPrint('RecipeAnalytics logRecipeClick failed: $e');

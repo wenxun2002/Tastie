@@ -193,22 +193,18 @@ class _ExplorePageState extends State<_ExplorePageStateful> {
                             )
                             ? RecipeClickSource.weatherPromoted
                             : RecipeClickSource.weatherNotPromoted;
+                        final weatherSnapshot =
+                            widget.controller.buildClickWeatherSnapshot();
                         final result = await Get.toNamed(
                           Pages.indexDetail,
                           arguments: <String, dynamic>{
                             'id': post.id,
                             'recordExploreDetailOpen': true,
                             'recipeClickSource': exploreClickSource,
-                            if (widget
-                                    .controller
-                                    .currentWeather
-                                    .conditionCode !=
-                                null)
-                              'currentWeatherCode': widget
-                                  .controller
-                                  .currentWeather
-                                  .conditionCode
-                                  .toString(),
+                            if (weatherSnapshot != null &&
+                                !weatherSnapshot.isEmpty)
+                              'weatherSnapshot':
+                                  weatherSnapshot.toArgumentsMap(),
                           },
                         );
                         await widget.controller.reloadLikedRecipeIds();

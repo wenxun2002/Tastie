@@ -14,6 +14,7 @@ import 'package:tastie/repositories/firestore_index_repository.dart';
 import 'package:tastie/data/weather_category.dart';
 import 'package:tastie/services/weather_context_service.dart';
 import 'package:tastie/utils/weather_classifier.dart';
+import 'package:tastie/models/recipe_click_weather_snapshot.dart';
 import 'package:tastie/services/recipe_analytics_service.dart';
 
 /// 非 neutral 天气下 Explore 的瀑布降级：promoted → neutral → suppressed → 结束。
@@ -75,6 +76,19 @@ class IndexController extends GetxController
       _lastWeatherFetchAt != null &&
       _weatherContextCache != null &&
       DateTime.now().difference(_lastWeatherFetchAt!).inMinutes < 60;
+
+  /// True after a successful BFF weather fetch (used for click ML snapshots).
+  bool get hasWeatherContextForAnalytics => _weatherContextCache != null;
+
+  /// City + category + numeric weather at click time (null if BFF never succeeded).
+  RecipeClickWeatherSnapshot? buildClickWeatherSnapshot() {
+    if (!hasWeatherContextForAnalytics) return null;
+    return RecipeClickWeatherSnapshot.fromState(
+      locationName: currentLocationName,
+      category: currentWeatherCategory,
+      weather: currentWeather,
+    );
+  }
 
   void _resetExplorePaginationState() {
     _cursorNeutralPopular = null;
@@ -545,16 +559,16 @@ class IndexController extends GetxController
   void openIndexDetailPage(
     String id, {
     RecipeClickSource clickSource = RecipeClickSource.weatherNotPromoted,
-    String? currentWeatherCode,
   }) {
+    final RecipeClickWeatherSnapshot? weather = buildClickWeatherSnapshot();
     Get.toNamed(
       Pages.indexDetail,
       arguments: <String, dynamic>{
         'id': id,
         'recordExploreDetailOpen': true,
         'recipeClickSource': clickSource,
-        if (currentWeatherCode != null && currentWeatherCode.isNotEmpty)
-          'currentWeatherCode': currentWeatherCode,
+        if (weather != null && !weather.isEmpty)
+          'weatherSnapshot': weather.toArgumentsMap(),
       },
     );
   }
