@@ -42,7 +42,13 @@ service cloud.firestore {
         && request.resource.data.get('authorUid', resource.data.userId)
              == resource.data.get('authorUid', resource.data.userId)
         && request.resource.data.get('status', 'active')
-             == resource.data.get('status', 'active');
+             == resource.data.get('status', 'active')
+        && request.resource.data.get('likeCount', 0)
+             == resource.data.get('likeCount', 0)
+        && request.resource.data.get('favCount', 0)
+             == resource.data.get('favCount', 0)
+        && request.resource.data.get('commentCount', 0)
+             == resource.data.get('commentCount', 0);
     }
 
     function validLikeCounterUpdate(recipeId) {
