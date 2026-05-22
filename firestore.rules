@@ -11,21 +11,51 @@ service cloud.firestore {
           .data.role == 'admin';
     }
 
+    function recipeInitialClickMetricsValid(metrics) {
+      return metrics is map
+        && metrics.keys().hasOnly([
+          'weather_promoted',
+          'weather_notpromoted',
+          'normal_browse',
+          'search',
+          'total'
+        ])
+        && metrics.weather_promoted == 0
+        && metrics.weather_notpromoted == 0
+        && metrics.normal_browse == 0
+        && metrics.search == 0
+        && metrics.total == 0;
+    }
+
+    function recipeInitialSystemFieldsValid() {
+      let d = request.resource.data;
+      return (!d.keys().hasAny(['status']) || d.status == 'active')
+        && !d.keys().hasAny(['clicked'])
+        && (!d.keys().hasAny(['click_metrics']) ||
+          recipeInitialClickMetricsValid(d.click_metrics));
+    }
+
+    function recipeSystemFieldsChanged() {
+      return request.resource.data.diff(resource.data).affectedKeys()
+        .hasAny(['status', 'clicked', 'click_metrics']);
+    }
+
     // --- Recipes (feed + engagement counters on same doc) ---
     match /recipes/{recipeId} {
       allow read: if true;
       allow create: if request.auth != null
-        && request.resource.data.userId == request.auth.uid;
-      // Author: full edit. Any signed-in user: counter increments (engagement).
+        && request.resource.data.userId == request.auth.uid
+        && recipeInitialSystemFieldsValid();
+      // Author: full edit except server/admin-managed fields.
+      // Any signed-in user: counter increments (engagement).
       // Admin app (client SDK): status-only merge for ban/unban.
       allow update: if request.auth != null && (
-        resource.data.userId == request.auth.uid
+        (resource.data.userId == request.auth.uid && !recipeSystemFieldsChanged())
         || request.resource.data.diff(resource.data).affectedKeys()
              .hasOnly(['likeCount', 'favCount'])
-        || request.resource.data.diff(resource.data).affectedKeys()
-             .hasOnly(['clicked'])
-        || request.resource.data.diff(resource.data).affectedKeys()
+        || (isAdmin() && request.resource.data.diff(resource.data).affectedKeys()
              .hasOnly(['status'])
+        )
       );
       allow delete: if request.auth != null
         && resource.data.userId == request.auth.uid;

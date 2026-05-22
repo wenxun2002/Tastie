@@ -86,8 +86,9 @@ class FirestoreIndexRepository {
       }
     }
 
-    /// 未满 [limit] 条视为没有下一页；满页且上一批仍「装满」说明服务器上可能还有后续文档。
-    final hasMore = items.length == limit && batchFull;
+    /// Continue when the last server batch was full, even if client-side
+    /// filtering hid banned docs and produced a short visible page.
+    final hasMore = batchFull;
 
     return PaginatedPostsResult(
       items: items,

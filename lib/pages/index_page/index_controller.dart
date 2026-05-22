@@ -184,7 +184,7 @@ class IndexController extends GetxController
       }
     }
 
-    if (page.items.length < _pageSize) {
+    if (!page.hasMore) {
       if (_currentStage == FetchStage.promoted) {
         _currentStage = FetchStage.neutral;
         _lastDoc = null;
