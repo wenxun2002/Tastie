@@ -47,6 +47,8 @@ class FirestoreIndexRepository {
     DocumentSnapshot<Map<String, dynamic>>? cursor = startAfterDocument;
     DocumentSnapshot<Map<String, dynamic>>? lastConsumed;
     var batchFull = false;
+    /// 本批 Firestore 文档未全部扫完就因 [limit] 停止（例如全库 28 条 < batchSize 40）。
+    var hasUnprocessedDocsInLastBatch = false;
 
     for (var b = 0; b < maxBatches && items.length < limit; b++) {
       Query<Map<String, dynamic>> query = _db.collection(collectionPath);
@@ -70,13 +72,16 @@ class FirestoreIndexRepository {
 
       batchFull = docs.length == batchSize;
       cursor = docs.last;
+      hasUnprocessedDocsInLastBatch = false;
 
-      for (final doc in docs) {
+      for (var i = 0; i < docs.length; i++) {
+        final doc = docs[i];
         lastConsumed = doc;
         final data = doc.data();
         if (!recipeDocIsPublicCatalogVisible(data)) continue;
         items.add(CardData.fromJson(_normalizeCardDataJson(doc.id, data)));
         if (items.length >= limit) {
+          hasUnprocessedDocsInLastBatch = i < docs.length - 1;
           break;
         }
       }
@@ -86,8 +91,9 @@ class FirestoreIndexRepository {
       }
     }
 
-    /// 未满 [limit] 条视为没有下一页；满页且上一批仍「装满」说明服务器上可能还有后续文档。
-    final hasMore = items.length == limit && batchFull;
+    /// 满页且（服务器本批仍可能还有后续 **或** 本批内还有未扫描的文档）。
+    final hasMore =
+        items.length == limit && (batchFull || hasUnprocessedDocsInLastBatch);
 
     return PaginatedPostsResult(
       items: items,

@@ -9,6 +9,7 @@ import 'package:tastie/models/recipe_firestore.dart';
 import 'package:tastie/pages/auth/auth_controller.dart';
 import 'package:tastie/repositories/firestore_recipe_repository.dart';
 import 'package:tastie/services/recipe_storage_service.dart';
+import 'package:tastie/utils/recipe_tag_normalizer.dart';
 
 /// Callback for progress messages (e.g. "Uploading images...", "Saving recipe...").
 typedef CreateRecipeProgressCallback = void Function(String message);
@@ -95,7 +96,7 @@ class CreateRecipeService {
       imageUrls: imageUrls,
       title: data.title.trim(),
       content: data.content.trim(),
-      tags: data.tags,
+      tags: RecipeTagNormalizer.normalize(data.tags),
       ingredients: ingredients,
       procedures: data.procedures,
       nutrition: nutrition,

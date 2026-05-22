@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:intl/intl.dart';
 import 'package:tastie/common/utils/image_utils.dart';
+import 'package:tastie/common/widgets/recipe_missing_images_placeholder.dart';
 import 'package:tastie/constants/color_plate.dart';
 import 'package:tastie/common/utils/count_format.dart';
 import 'package:tastie/pages/index_page/index_detail_page/index_detail_controller.dart';
@@ -219,19 +220,36 @@ class _IndexDetailPageState extends State<IndexDetailPage>
     );
   }
 
+  List<String> _recipeDisplayImageUrls(IndexDetailController controller) {
+    return controller.recipe.imageUrls
+        .map((url) => url.trim())
+        .where((url) => url.isNotEmpty)
+        .toList(growable: false);
+  }
+
   Widget buildImageSwiper(IndexDetailController controller) {
+    final imageUrls = _recipeDisplayImageUrls(controller);
+    final height = Get.height * 2 / 3;
+
+    if (imageUrls.isEmpty) {
+      return RecipeMissingImagesPlaceholder(
+        height: height,
+        width: Get.width,
+      );
+    }
+
     return SizedBox(
-      height: Get.height * 2 / 3,
+      height: height,
       child: Swiper(
         itemBuilder: (BuildContext context, int index) {
           return ImageUtils.loadImage(
-            controller.recipe.imageUrls[index],
+            imageUrls[index],
             width: Get.width,
             fit: BoxFit.contain,
           );
         },
         loop: false,
-        itemCount: controller.recipe.imageUrls.length,
+        itemCount: imageUrls.length,
         indicatorLayout: PageIndicatorLayout.SCALE,
         pagination: SwiperPagination(
           builder: DotSwiperPaginationBuilder(

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:tastie/common/utils/count_format.dart';
 import 'package:tastie/common/utils/image_utils.dart';
+import 'package:tastie/common/widgets/recipe_missing_images_placeholder.dart';
 import 'package:tastie/models/card_data.dart';
 
 class CardItem extends StatelessWidget {
@@ -36,14 +37,21 @@ class CardItem extends StatelessWidget {
               LayoutBuilder(
                 builder: (context, constraints) {
                   final imageWidth = constraints.maxWidth;
+                  final cover = cardData.cover.trim();
                   return ClipRRect(
                     borderRadius:
                         const BorderRadius.vertical(top: Radius.circular(4)),
-                    child: ImageUtils.loadImage(
-                      cardData.cover,
-                      width: imageWidth,
-                      fit: BoxFit.cover,
-                    ),
+                    child: RecipeMissingImagesPlaceholder.coverUrlIsMissing(
+                            cover)
+                        ? RecipeMissingImagesPlaceholder(
+                            width: imageWidth,
+                            compact: true,
+                          )
+                        : ImageUtils.loadImage(
+                            cover,
+                            width: imageWidth,
+                            fit: BoxFit.cover,
+                          ),
                   );
                 },
               ),

@@ -1,4 +1,5 @@
 import 'package:tastie/constants/ingredient_units.dart';
+import 'package:tastie/utils/recipe_tag_normalizer.dart';
 
 class CreatePostData {
   CreatePostData({
@@ -51,7 +52,9 @@ class CreatePostData {
     return CreatePostData(
       title: (json['title'] ?? '').toString(),
       content: (json['content'] ?? '').toString(),
-      tags: tagsRaw.map((item) => item.toString()).toList(growable: false),
+      tags: RecipeTagNormalizer.normalize(
+        tagsRaw.map((item) => item.toString()),
+      ),
       ingredients: ingredientsRaw
           .map(
             (item) => IngredientData.fromJson(
