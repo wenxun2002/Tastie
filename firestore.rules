@@ -13,45 +13,204 @@ service cloud.firestore {
 
     // --- Recipes (feed + engagement counters on same doc) ---
     match /recipes/{recipeId} {
+      function recipePath() {
+        return /databases/$(database)/documents/recipes/$(recipeId);
+      }
+
+      function signedInUserLikePath() {
+        return /databases/$(database)/documents/users/$(request.auth.uid)/likes/$(recipeId);
+      }
+
+      function signedInUserCollectionPath() {
+        return /databases/$(database)/documents/users/$(request.auth.uid)/collections/$(recipeId);
+      }
+
+      function recipeCreateCountersValid() {
+        let d = request.resource.data;
+        return (!d.keys().hasAny(['likeCount']) || d.likeCount == 0)
+          && (!d.keys().hasAny(['favCount']) || d.favCount == 0)
+          && (!d.keys().hasAny(['commentCount']) || d.commentCount == 0)
+          && (!d.keys().hasAny(['clicked']) || d.clicked == 0)
+          && (!d.keys().hasAny(['click_metrics']) || (
+            d.click_metrics is map
+            && d.click_metrics.weather_promoted == 0
+            && d.click_metrics.weather_notpromoted == 0
+            && d.click_metrics.normal_browse == 0
+            && d.click_metrics.search == 0
+            && d.click_metrics.total == 0
+          ));
+      }
+
+      function recipeCreateAllowed() {
+        let d = request.resource.data;
+        return isSignedIn()
+          && d.userId == request.auth.uid
+          && (!d.keys().hasAny(['authorUid']) || d.authorUid == request.auth.uid)
+          && (!d.keys().hasAny(['status']) || d.status == 'active')
+          && recipeCreateCountersValid();
+      }
+
+      function recipeOwnerUpdateAllowed() {
+        return isSignedIn()
+          && resource.data.userId == request.auth.uid
+          && request.resource.data.userId == resource.data.userId
+          && request.resource.data.authorUid == resource.data.authorUid
+          && request.resource.data.status == resource.data.status
+          && request.resource.data.createdAt == resource.data.createdAt
+          && request.resource.data.likeCount == resource.data.likeCount
+          && request.resource.data.favCount == resource.data.favCount
+          && request.resource.data.commentCount == resource.data.commentCount
+          && request.resource.data.clicked == resource.data.clicked
+          && request.resource.data.click_metrics == resource.data.click_metrics;
+      }
+
+      function likeCountChangeValid() {
+        return resource.data.likeCount is number
+          && request.resource.data.likeCount is number
+          && request.resource.data.likeCount >= 0
+          && (
+            (
+              request.resource.data.likeCount == resource.data.likeCount + 1
+              && !exists(signedInUserLikePath())
+              && existsAfter(signedInUserLikePath())
+            )
+            || (
+              request.resource.data.likeCount == resource.data.likeCount - 1
+              && exists(signedInUserLikePath())
+              && !existsAfter(signedInUserLikePath())
+            )
+          );
+      }
+
+      function favCountChangeValid() {
+        return resource.data.favCount is number
+          && request.resource.data.favCount is number
+          && request.resource.data.favCount >= 0
+          && (
+            (
+              request.resource.data.favCount == resource.data.favCount + 1
+              && !exists(signedInUserCollectionPath())
+              && existsAfter(signedInUserCollectionPath())
+            )
+            || (
+              request.resource.data.favCount == resource.data.favCount - 1
+              && exists(signedInUserCollectionPath())
+              && !existsAfter(signedInUserCollectionPath())
+            )
+          );
+      }
+
+      function recipeCounterUpdateAllowed() {
+        let affected = request.resource.data.diff(resource.data).affectedKeys();
+        return isSignedIn()
+          && affected.hasOnly(['likeCount', 'favCount'])
+          && (!affected.hasAny(['likeCount']) || likeCountChangeValid())
+          && (!affected.hasAny(['favCount']) || favCountChangeValid());
+      }
+
+      function recipeAdminStatusUpdateAllowed() {
+        return isAdmin()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
+          && request.resource.data.status in ['active', 'banned'];
+      }
+
       allow read: if true;
-      allow create: if request.auth != null
-        && request.resource.data.userId == request.auth.uid;
-      // Author: full edit. Any signed-in user: counter increments (engagement).
-      // Admin app (client SDK): status-only merge for ban/unban.
-      allow update: if request.auth != null && (
-        resource.data.userId == request.auth.uid
-        || request.resource.data.diff(resource.data).affectedKeys()
-             .hasOnly(['likeCount', 'favCount'])
-        || request.resource.data.diff(resource.data).affectedKeys()
-             .hasOnly(['clicked'])
-        || request.resource.data.diff(resource.data).affectedKeys()
-             .hasOnly(['status'])
-      );
-      allow delete: if request.auth != null
-        && resource.data.userId == request.auth.uid;
+      allow create: if recipeCreateAllowed();
+      // Owners can edit content, engagement updates must be coupled with the
+      // user's like/collection doc, and moderation status is admin-only.
+      allow update: if recipeOwnerUpdateAllowed()
+        || recipeCounterUpdateAllowed()
+        || recipeAdminStatusUpdateAllowed();
+      allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
     }
 
     // --- User profile + per-user likes / collections ---
     match /users/{userId} {
-      allow read: if true;
-      allow create, update: if request.auth != null
-        && request.auth.uid == userId;
+      function userProfileCreateAllowed() {
+        let d = request.resource.data;
+        return isSignedIn()
+          && request.auth.uid == userId
+          && d.keys().hasOnly([
+            'uid', 'email', 'displayName', 'photoURL',
+            'providerIds', 'lastLoginAt', 'createdAt'
+          ])
+          && userProfileFieldsValid(userId);
+      }
+
+      function userProfileUpdateAllowed() {
+        let affected = request.resource.data.diff(resource.data).affectedKeys();
+        return isSignedIn()
+          && request.auth.uid == userId
+          && affected.hasOnly([
+            'uid', 'email', 'displayName', 'photoURL',
+            'providerIds', 'lastLoginAt', 'createdAt'
+          ])
+          && (!resource.data.keys().hasAny(['createdAt'])
+            || request.resource.data.createdAt == resource.data.createdAt)
+          && userProfileFieldsValid(userId);
+      }
+
+      function userProfileFieldsValid(expectedUid) {
+        let d = request.resource.data;
+        return d.uid == expectedUid
+          && (!d.keys().hasAny(['email']) || d.email is string || d.email == null)
+          && (!d.keys().hasAny(['displayName']) || d.displayName is string || d.displayName == null)
+          && (!d.keys().hasAny(['photoURL']) || d.photoURL is string || d.photoURL == null)
+          && (!d.keys().hasAny(['providerIds']) || d.providerIds is list)
+          && (!d.keys().hasAny(['lastLoginAt']) || d.lastLoginAt is timestamp)
+          && (!d.keys().hasAny(['createdAt']) || d.createdAt is timestamp);
+      }
+
+      function recipeExistsAndLikeCountChangedBy(targetRecipeId, delta) {
+        return exists(/databases/$(database)/documents/recipes/$(targetRecipeId))
+          && getAfter(/databases/$(database)/documents/recipes/$(targetRecipeId)).data.likeCount ==
+            get(/databases/$(database)/documents/recipes/$(targetRecipeId)).data.likeCount + delta;
+      }
+
+      function recipeExistsAndFavCountChangedBy(targetRecipeId, delta) {
+        return exists(/databases/$(database)/documents/recipes/$(targetRecipeId))
+          && getAfter(/databases/$(database)/documents/recipes/$(targetRecipeId)).data.favCount ==
+            get(/databases/$(database)/documents/recipes/$(targetRecipeId)).data.favCount + delta;
+      }
+
+      function engagementDocCreateAllowed(targetRecipeId) {
+        return isSignedIn()
+          && request.auth.uid == userId
+          && request.resource.data.keys().hasOnly(['recipeId', 'createdAt'])
+          && request.resource.data.recipeId == targetRecipeId
+          && (!request.resource.data.keys().hasAny(['createdAt'])
+            || request.resource.data.createdAt is timestamp);
+      }
+
+      allow read: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+      allow create: if userProfileCreateAllowed();
+      allow update: if userProfileUpdateAllowed();
 
       match /likes/{recipeId} {
-        allow read, write: if request.auth != null
-          && request.auth.uid == userId;
+        allow read: if isSignedIn() && request.auth.uid == userId;
+        allow create: if engagementDocCreateAllowed(recipeId)
+          && recipeExistsAndLikeCountChangedBy(recipeId, 1);
+        allow delete: if isSignedIn()
+          && request.auth.uid == userId
+          && recipeExistsAndLikeCountChangedBy(recipeId, -1);
+        allow update: if false;
       }
 
       match /collections/{recipeId} {
-        allow read, write: if request.auth != null
-          && request.auth.uid == userId;
+        allow read: if isSignedIn() && request.auth.uid == userId;
+        allow create: if engagementDocCreateAllowed(recipeId)
+          && recipeExistsAndFavCountChangedBy(recipeId, 1);
+        allow delete: if isSignedIn()
+          && request.auth.uid == userId
+          && recipeExistsAndFavCountChangedBy(recipeId, -1);
+        allow update: if false;
       }
     }
 
     // --- Reports (mobile creates; admin console reads with same auth) ---
     match /reports/{reportId} {
-      allow read: if request.auth != null;
-      allow create: if request.auth != null;
+      allow read: if isAdmin();
+      allow create: if isSignedIn();
       allow update, delete: if false;
     }
 
