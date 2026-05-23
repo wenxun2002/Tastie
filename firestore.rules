@@ -55,17 +55,13 @@ service cloud.firestore {
       }
 
       function recipeOwnerUpdateAllowed() {
+        let affected = request.resource.data.diff(resource.data).affectedKeys();
         return isSignedIn()
           && resource.data.userId == request.auth.uid
-          && request.resource.data.userId == resource.data.userId
-          && request.resource.data.authorUid == resource.data.authorUid
-          && request.resource.data.status == resource.data.status
-          && request.resource.data.createdAt == resource.data.createdAt
-          && request.resource.data.likeCount == resource.data.likeCount
-          && request.resource.data.favCount == resource.data.favCount
-          && request.resource.data.commentCount == resource.data.commentCount
-          && request.resource.data.clicked == resource.data.clicked
-          && request.resource.data.click_metrics == resource.data.click_metrics;
+          && affected.hasOnly([
+            'author', 'imageUrls', 'title', 'content', 'tags',
+            'ingredients', 'procedures', 'nutrition'
+          ]);
       }
 
       function likeCountChangeValid() {
