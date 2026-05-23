@@ -5,10 +5,14 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    function signedInUserPath() {
+      return /databases/$(database)/documents/users/$(request.auth.uid);
+    }
+
     function isAdmin() {
-      return isSignedIn() &&
-        get(/databases/$(database)/documents/users/$(request.auth.uid))
-          .data.role == 'admin';
+      return isSignedIn()
+        && exists(signedInUserPath())
+        && get(signedInUserPath()).data.role == 'admin';
     }
 
     // --- Recipes (feed + engagement counters on same doc) ---
