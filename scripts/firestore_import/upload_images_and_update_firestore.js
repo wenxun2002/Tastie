@@ -86,6 +86,10 @@ function replaceAssetPaths(value, mapping) {
   return value;
 }
 
+function hasChanges(before, after) {
+  return JSON.stringify(after) !== JSON.stringify(before);
+}
+
 async function ensureUploaded(bucket, assetPath) {
   const relative = assetPath.replace(/^assets[\\/]/, 'assets/');
   const localPath = path.join(repoRoot, relative);
@@ -155,14 +159,29 @@ async function main() {
   let updatedCount = 0;
   for (const { col, ref, data } of allDocs) {
     const newData = replaceAssetPaths(data, mapping);
-    const changed = JSON.stringify(newData) !== JSON.stringify(data);
+    const changed = hasChanges(data, newData);
     if (!changed) continue;
 
-    updatedCount += 1;
     console.log(`[update] ${col}/${ref.id}`);
-    if (!dryRun) {
-      await ref.set(newData, { merge: false });
+    if (dryRun) {
+      updatedCount += 1;
+      continue;
     }
+
+    const updated = await db.runTransaction(async (txn) => {
+      const latestSnap = await txn.get(ref);
+      if (!latestSnap.exists) return false;
+
+      const latestData = latestSnap.data();
+      const latestNewData = replaceAssetPaths(latestData, mapping);
+      if (!hasChanges(latestData, latestNewData)) return false;
+
+      // Replacing the whole latest document keeps nested arrays/maps exact while
+      // the transaction protects writes that land after the initial collection scan.
+      txn.set(ref, latestNewData, { merge: false });
+      return true;
+    });
+    if (updated) updatedCount += 1;
   }
 
   console.log(
