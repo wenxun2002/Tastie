@@ -7,6 +7,7 @@ service cloud.firestore {
 
     function isAdmin() {
       return isSignedIn() &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
         get(/databases/$(database)/documents/users/$(request.auth.uid))
           .data.role == 'admin';
     }
@@ -25,7 +26,7 @@ service cloud.firestore {
         'uid', 'email', 'displayName', 'photoURL', 'providerIds',
         'lastLoginAt', 'createdAt'
       ]) &&
-      (!request.resource.data.keys().hasAny(['uid']) ||
+      (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['uid']) ||
         request.resource.data.uid == userId);
     }
 

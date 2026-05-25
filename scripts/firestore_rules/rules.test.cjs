@@ -115,6 +115,16 @@ describe('recipe moderation rules', () => {
     await assertFails(updateDoc(doc(authedDb('alice'), 'recipes/recipe-1'), {
       status: 'banned',
     }));
+
+    await seedFirestore(async (db) => {
+      await updateDoc(doc(db, 'recipes/recipe-1'), {
+        status: 'banned',
+      });
+    });
+
+    await assertFails(updateDoc(doc(authedDb('alice'), 'recipes/recipe-1'), {
+      status: 'active',
+    }));
   });
 
   it('allow admins to update only valid moderation status values', async () => {
@@ -131,6 +141,16 @@ describe('recipe moderation rules', () => {
 
     await assertFails(updateDoc(doc(adminDb, 'recipes/recipe-1'), {
       status: 'deleted',
+    }));
+  });
+
+  it('preserve existing recipe author edits and engagement counter updates', async () => {
+    await assertSucceeds(updateDoc(doc(authedDb('alice'), 'recipes/recipe-1'), {
+      title: 'Updated Soup',
+    }));
+
+    await assertSucceeds(updateDoc(doc(authedDb('mallory'), 'recipes/recipe-1'), {
+      likeCount: 1,
     }));
   });
 });
