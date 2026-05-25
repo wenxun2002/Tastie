@@ -11,21 +11,52 @@ service cloud.firestore {
           .data.role == 'admin';
     }
 
+    function userProfileCreateIsSafe(userId) {
+      return request.resource.data.keys().hasOnly([
+        'uid', 'email', 'displayName', 'photoURL', 'providerIds',
+        'lastLoginAt', 'createdAt'
+      ]) &&
+      (!request.resource.data.keys().hasAny(['uid']) ||
+        request.resource.data.uid == userId);
+    }
+
+    function userProfileUpdateIsSafe(userId) {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+        'uid', 'email', 'displayName', 'photoURL', 'providerIds',
+        'lastLoginAt', 'createdAt'
+      ]) &&
+      (!request.resource.data.keys().hasAny(['uid']) ||
+        request.resource.data.uid == userId);
+    }
+
+    function recipeStatusIsValid() {
+      return request.resource.data.status in ['active', 'banned'];
+    }
+
+    function recipeStatusUnchanged() {
+      return !request.resource.data.diff(resource.data).affectedKeys()
+        .hasAny(['status']);
+    }
+
     // --- Recipes (feed + engagement counters on same doc) ---
     match /recipes/{recipeId} {
       allow read: if true;
       allow create: if request.auth != null
-        && request.resource.data.userId == request.auth.uid;
+        && request.resource.data.userId == request.auth.uid
+        && (!request.resource.data.keys().hasAny(['status'])
+          || request.resource.data.status == 'active');
       // Author: full edit. Any signed-in user: counter increments (engagement).
       // Admin app (client SDK): status-only merge for ban/unban.
       allow update: if request.auth != null && (
-        resource.data.userId == request.auth.uid
+        (resource.data.userId == request.auth.uid && recipeStatusUnchanged())
         || request.resource.data.diff(resource.data).affectedKeys()
              .hasOnly(['likeCount', 'favCount'])
         || request.resource.data.diff(resource.data).affectedKeys()
              .hasOnly(['clicked'])
-        || request.resource.data.diff(resource.data).affectedKeys()
-             .hasOnly(['status'])
+        || (isAdmin()
+          && request.resource.data.diff(resource.data).affectedKeys()
+               .hasOnly(['status'])
+          && recipeStatusIsValid())
       );
       allow delete: if request.auth != null
         && resource.data.userId == request.auth.uid;
@@ -34,8 +65,12 @@ service cloud.firestore {
     // --- User profile + per-user likes / collections ---
     match /users/{userId} {
       allow read: if true;
-      allow create, update: if request.auth != null
-        && request.auth.uid == userId;
+      allow create: if request.auth != null
+        && request.auth.uid == userId
+        && userProfileCreateIsSafe(userId);
+      allow update: if request.auth != null
+        && request.auth.uid == userId
+        && userProfileUpdateIsSafe(userId);
 
       match /likes/{recipeId} {
         allow read, write: if request.auth != null
