@@ -6,6 +6,7 @@ import admin from 'firebase-admin';
 
 const args = new Set(process.argv.slice(2));
 const dryRun = args.has('--dry-run');
+const emulatorOnly = args.has('--emulator-only');
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -36,6 +37,22 @@ function initAdmin() {
   const serviceAccount = JSON.parse(fs.readFileSync(serviceAccountPath, 'utf8'));
   const projectId =
     process.env.FIREBASE_PROJECT_ID || serviceAccount.project_id || 'tastie-1701f';
+
+  if (emulatorOnly) {
+    if (!process.env.FIRESTORE_EMULATOR_HOST) {
+      console.warn(
+        '[warn] FIRESTORE_EMULATOR_HOST is not set. Set it to 127.0.0.1:8080 so writes hit the emulator.',
+      );
+    }
+    admin.initializeApp({
+      credential: admin.credential.cert(serviceAccount),
+      projectId,
+    });
+    const db = admin.firestore();
+    db.settings({ ignoreUndefinedProperties: true });
+    return { db, bucket: null };
+  }
+
   const storageBucket =
     process.env.FIREBASE_STORAGE_BUCKET || `${projectId}.firebasestorage.app`;
 
@@ -90,6 +107,20 @@ function hasChanges(before, after) {
   return JSON.stringify(after) !== JSON.stringify(before);
 }
 
+function emulatorPublicUrl(assetPath) {
+  const storagePath = assetPath.replace(/^assets\//, 'images/');
+  const encoded = encodeURIComponent(storagePath);
+  return `https://emulator.local/v0/b/emulator/o/${encoded}?alt=media`;
+}
+
+function assertLocalAssetExists(assetPath) {
+  const relative = assetPath.replace(/^assets[\\/]/, 'assets/');
+  const localPath = path.join(repoRoot, relative);
+  if (!fs.existsSync(localPath)) {
+    throw new Error(`Local asset not found for image: ${assetPath}\nExpected at: ${localPath}`);
+  }
+}
+
 async function ensureUploaded(bucket, assetPath) {
   const relative = assetPath.replace(/^assets[\\/]/, 'assets/');
   const localPath = path.join(repoRoot, relative);
@@ -121,10 +152,40 @@ async function ensureUploaded(bucket, assetPath) {
   return { storagePath, publicUrl };
 }
 
+function resolveModeLabel() {
+  if (dryRun && emulatorOnly) {
+    return 'DRY RUN + EMULATOR ONLY (fake URLs, no Firestore write)';
+  }
+  if (dryRun) {
+    return 'DRY RUN (no upload, no write)';
+  }
+  if (emulatorOnly) {
+    return 'EMULATOR ONLY (skip Storage, fake URLs + update Firestore)';
+  }
+  return 'MIGRATE (upload + update Firestore)';
+}
+
+async function buildAssetPathMapping(assetPaths, bucket) {
+  const mapping = {};
+  for (const assetPath of assetPaths) {
+    if (emulatorOnly) {
+      assertLocalAssetExists(assetPath);
+      const publicUrl = emulatorPublicUrl(assetPath);
+      console.log(`[emulator-only] ${assetPath} -> ${publicUrl}`);
+      mapping[assetPath] = publicUrl;
+      continue;
+    }
+
+    const { publicUrl } = await ensureUploaded(bucket, assetPath);
+    mapping[assetPath] = publicUrl;
+  }
+  return mapping;
+}
+
 async function main() {
   console.log(`Repo root: ${repoRoot}`);
   console.log(`Assets images dir: ${assetsImagesDir}`);
-  console.log(`Mode: ${dryRun ? 'DRY RUN (no upload, no write)' : 'MIGRATE (upload + update Firestore)'}`);
+  console.log(`Mode: ${resolveModeLabel()}`);
 
   assert(fs.existsSync(assetsImagesDir), `Directory not found: ${assetsImagesDir}`);
 
@@ -150,11 +211,7 @@ async function main() {
     return;
   }
 
-  const mapping = {};
-  for (const assetPath of assetPaths) {
-    const { publicUrl } = await ensureUploaded(bucket, assetPath);
-    mapping[assetPath] = publicUrl;
-  }
+  const mapping = await buildAssetPathMapping(assetPaths, bucket);
 
   let updatedCount = 0;
   for (const { col, ref, data } of allDocs) {
