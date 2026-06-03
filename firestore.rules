@@ -207,11 +207,14 @@ service cloud.firestore {
       }
     }
 
-    // --- Reports (mobile creates; admin console reads with same auth) ---
+    // --- Reports (mobile creates; admin resolves via status only) ---
     match /reports/{reportId} {
       allow read: if isAdmin();
       allow create: if isSignedIn();
-      allow update, delete: if false;
+      allow update: if isAdmin()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
+        && request.resource.data.status in ['pending', 'solved'];
+      allow delete: if false;
     }
 
     match /tags/{tagId} {

@@ -200,4 +200,26 @@ describe('firestore.rules', () => {
     unfavoriteBatch.update(recipeRef, {favCount: 0});
     await assertSucceeds(unfavoriteBatch.commit());
   });
+
+  it('allows only admins to change report status', async () => {
+    await seedDoc('users/admin', {uid: 'admin', role: 'admin'});
+    await seedDoc('reports/r1', {
+      recipeId: 'r1',
+      reportedBy: 'alice',
+      status: 'pending',
+    });
+
+    await assertFails(updateDoc(doc(authedDb('alice'), 'reports/r1'), {
+      status: 'solved',
+    }));
+    await assertFails(updateDoc(doc(authedDb('admin'), 'reports/r1'), {
+      reason: 'spam',
+    }));
+    await assertSucceeds(updateDoc(doc(authedDb('admin'), 'reports/r1'), {
+      status: 'solved',
+    }));
+    await assertSucceeds(updateDoc(doc(authedDb('admin'), 'reports/r1'), {
+      status: 'pending',
+    }));
+  });
 });

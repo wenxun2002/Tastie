@@ -34,6 +34,7 @@ class ReportRecipeService {
       'reportedBy': reportedBy,
       'reason': reason,
       'description': description,
+      'status': 'pending',
       'timestamp': FieldValue.serverTimestamp(),
     });
   }

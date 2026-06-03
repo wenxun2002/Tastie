@@ -155,7 +155,10 @@ async function recomputeDashboardMetrics(): Promise<void> {
     countQuery(usersCol),
     countQuery(recipesCol),
     countQuery(reportsCol),
-    countQuery(reportsCol.where("status", "==", "resolved")),
+    Promise.all([
+      countQuery(reportsCol.where("status", "==", "solved")),
+      countQuery(reportsCol.where("status", "==", "resolved")),
+    ]).then(([solved, legacyResolved]) => solved + legacyResolved),
     countQuery(usersCol.where("status", "==", "banned")),
     countQuery(
       recipesCol
