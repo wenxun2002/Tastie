@@ -4,6 +4,37 @@ import 'package:tastie/mock/mock_weather.dart';
 import 'package:tastie/models/weather_data.dart';
 import 'package:tastie/pages/index_page/index_controller.dart';
 
+/// Hidden dev/demo entry: long-press the home header logo to open this sheet.
+Future<void> showWeatherSelectorSheet(
+  BuildContext context,
+  IndexController controller,
+) {
+  return showModalBottomSheet<void>(
+    context: context,
+    backgroundColor: Colors.white,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
+    ),
+    builder: (sheetContext) => SafeArea(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+            child: Text(
+              'Switch weather',
+              style: ColorPlate.heading2.copyWith(color: ColorPlate.primary),
+            ),
+          ),
+          WeatherSelector(controller: controller),
+          const SizedBox(height: 8),
+        ],
+      ),
+    ),
+  );
+}
+
 class WeatherSelector extends StatelessWidget {
   final IndexController controller;
 

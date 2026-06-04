@@ -31,10 +31,14 @@ class IndexPage extends StatelessWidget {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Image.asset(
-                    "assets/images/LogoTransparent.png",
-                    width: 30,
-                    height: 30,
+                  GestureDetector(
+                    onLongPress: () =>
+                        showWeatherSelectorSheet(context, controller),
+                    child: Image.asset(
+                      "assets/images/LogoTransparent.png",
+                      width: 30,
+                      height: 30,
+                    ),
                   ),
                   SizedBox(
                     height: 30,
@@ -151,17 +155,10 @@ class _ExplorePageState extends State<_ExplorePageStateful> {
             controller: _scrollController,
             physics: const AlwaysScrollableScrollPhysics(),
             slivers: [
-              // Weather banner + selector
               SliverToBoxAdapter(
-                child: Column(
-                  children: [
-                    WeatherBanner(
-                      weatherData: widget.controller.currentWeather,
-                      locationName: widget.controller.currentLocationName,
-                    ),
-                    const SizedBox(height: 12),
-                    WeatherSelector(controller: widget.controller),
-                  ],
+                child: WeatherBanner(
+                  weatherData: widget.controller.currentWeather,
+                  locationName: widget.controller.currentLocationName,
                 ),
               ),
 
