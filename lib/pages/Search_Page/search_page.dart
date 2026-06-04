@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:tastie/constants/color_plate.dart';
 import 'package:tastie/pages/Search_Page/search_models.dart';
 import 'package:tastie/pages/Search_Page/search_result_page.dart';
+import 'package:tastie/pages/Search_Page/widgets/animated_matching_ingredient_chips.dart';
 import 'package:tastie/repositories/firestore_search_ingredient_repository.dart';
 
 class SearchPage extends StatefulWidget {
@@ -48,6 +49,8 @@ class _SearchPageState extends State<SearchPage> {
   bool _usingFallbackIngredients = false;
 
   bool _showAllIngredients = false;
+  bool _matchingPanelWasOpen = false;
+  bool _animateMatchingPanelSize = false;
   bool _isCalorieFilterEnabled = false;
   bool _includeHighCalorieMeals = false;
   RangeValues _calorieRange = const RangeValues(200, 600);
@@ -387,7 +390,11 @@ class _SearchPageState extends State<SearchPage> {
             contentPadding: EdgeInsets.zero,
           ),
           onChanged: (_) {
-            setState(() {});
+            final open = _queryIngredientSuggestions.isNotEmpty;
+            setState(() {
+              _animateMatchingPanelSize = open != _matchingPanelWasOpen;
+              _matchingPanelWasOpen = open;
+            });
           },
           onSubmitted: (_) => _onSearchPressed(),
         ),
@@ -398,54 +405,8 @@ class _SearchPageState extends State<SearchPage> {
   Widget _buildAnimatedIngredientSuggestions() {
     final suggestions = _queryIngredientSuggestions;
     final show = suggestions.isNotEmpty;
-    final suggestionKey = suggestions.join('\u0001');
 
-    return AnimatedSize(
-      duration: _softTransitionDuration,
-      curve: Curves.easeInOutCubic,
-      alignment: Alignment.topCenter,
-      child: AnimatedSwitcher(
-        duration: _softTransitionDuration,
-        switchInCurve: Curves.easeOutCubic,
-        switchOutCurve: Curves.easeInCubic,
-        layoutBuilder: (currentChild, previousChildren) {
-          return Stack(
-            alignment: Alignment.topCenter,
-            children: [
-              ...previousChildren,
-              if (currentChild != null) currentChild,
-            ],
-          );
-        },
-        transitionBuilder: (child, animation) {
-          final slide = Tween<Offset>(
-            begin: const Offset(0, -0.06),
-            end: Offset.zero,
-          ).animate(CurvedAnimation(
-            parent: animation,
-            curve: Curves.easeOutCubic,
-          ));
-          return FadeTransition(
-            opacity: animation,
-            child: SlideTransition(position: slide, child: child),
-          );
-        },
-        child: show
-            ? Padding(
-                key: ValueKey<String>(suggestionKey),
-                padding: const EdgeInsets.only(bottom: 16),
-                child: _buildQueryIngredientSuggestions(suggestions),
-              )
-            : const SizedBox(
-                key: ValueKey<String>('ingredient-suggestions-empty'),
-                width: double.infinity,
-              ),
-      ),
-    );
-  }
-
-  Widget _buildQueryIngredientSuggestions(List<String> suggestions) {
-    return Column(
+    final chipsPanel = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
@@ -457,20 +418,39 @@ class _SearchPageState extends State<SearchPage> {
           ),
         ),
         const SizedBox(height: 8),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: suggestions
-              .map(
-                (name) => ActionChip(
-                  label: Text(name),
-                  onPressed: () => _toggleIngredient(name),
-                ),
-              )
-              .toList(),
+        AnimatedSize(
+          duration: _softTransitionDuration,
+          curve: Curves.easeInOutCubic,
+          alignment: Alignment.topLeft,
+          child: AnimatedMatchingIngredientChips(
+            suggestions: suggestions,
+            duration: _softTransitionDuration,
+            onSelected: _toggleIngredient,
+          ),
         ),
       ],
     );
+
+    final panel = Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: chipsPanel,
+    );
+
+    // Only animate height when the panel opens or closes — not on each keystroke.
+    if (_animateMatchingPanelSize) {
+      return AnimatedSize(
+        duration: _softTransitionDuration,
+        curve: Curves.easeInOutCubic,
+        alignment: Alignment.topLeft,
+        child: show ? panel : const SizedBox(width: double.infinity),
+      );
+    }
+
+    if (!show) {
+      return const SizedBox.shrink();
+    }
+
+    return panel;
   }
 
   Widget _buildIngredientsSection() {
