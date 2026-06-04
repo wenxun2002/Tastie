@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:tastie/constants/color_plate.dart';
 import 'package:tastie/pages/Search_Page/search_models.dart';
 import 'package:tastie/pages/Search_Page/search_result_page.dart';
+import 'package:tastie/repositories/firestore_search_ingredient_repository.dart';
 
 class SearchPage extends StatefulWidget {
   const SearchPage({
@@ -21,42 +22,11 @@ class _SearchPageState extends State<SearchPage> {
   static const Duration _softTransitionDuration = Duration(milliseconds: 320);
   static const double _calorieMin = 0;
   static const double _calorieMax = 1000;
+  static const int _ingredientPreviewCount = 10;
+  static const int _maxIngredientSuggestions = 8;
 
-  final List<String> _baseIngredients = const [
-    'Potato',
-    'Corn',
-    'Cheese',
-    'Tomato',
-    'Black Pepper',
-    'Onion',
-    'Garlic',
-    'Broccoli',
-    'Chicken Breast',
-    'Eggs',
-    'Salt',
-    'Olive Oil',
-    'Rice',
-    'Pasta',
-  ];
-
-  final List<String> _extraIngredients = const [
-    'Chili',
-    'Butter',
-    'Sugar',
-    'Salmon',
-    'Shrimp',
-    'Carrot',
-    'Mushroom',
-    'Banana',
-    'Avocado',
-    'Basil',
-    'Ginger',
-    'Yogurt',
-    'Bread',
-    'Soy Sauce',
-    'Vinegar',
-    'Mayonnaise',
-  ];
+  final FirestoreSearchIngredientRepository _ingredientRepository =
+      FirestoreSearchIngredientRepository();
 
   final List<String> _tags = const [
     '#Comfort',
@@ -73,6 +43,10 @@ class _SearchPageState extends State<SearchPage> {
   final Set<String> _selectedIngredients = {};
   final Set<String> _selectedTags = {};
 
+  List<String> _allIngredients = [];
+  bool _ingredientsLoading = true;
+  bool _usingFallbackIngredients = false;
+
   bool _showAllIngredients = false;
   bool _isCalorieFilterEnabled = false;
   bool _includeHighCalorieMeals = false;
@@ -83,6 +57,32 @@ class _SearchPageState extends State<SearchPage> {
   void initState() {
     super.initState();
     _hydrateInitialCriteria();
+    _loadIngredients();
+  }
+
+  Future<void> _loadIngredients() async {
+    setState(() => _ingredientsLoading = true);
+    try {
+      final names = await _ingredientRepository.fetchActiveIngredientNames();
+      if (!mounted) return;
+      setState(() {
+        if (names.isNotEmpty) {
+          _allIngredients = names;
+          _usingFallbackIngredients = false;
+        } else {
+          _allIngredients = _ingredientRepository.fallbackNames();
+          _usingFallbackIngredients = true;
+        }
+        _ingredientsLoading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _allIngredients = _ingredientRepository.fallbackNames();
+        _usingFallbackIngredients = true;
+        _ingredientsLoading = false;
+      });
+    }
   }
 
   @override
@@ -96,11 +96,27 @@ class _SearchPageState extends State<SearchPage> {
   Color get _designPrimaryColor => ColorPlate.primary;
   Color get _designDisabledColor => ColorPlate.disabled;
 
+  bool get _canExpandIngredients =>
+      _allIngredients.length > _ingredientPreviewCount;
+
   List<String> get _visibleIngredients {
-    if (_showAllIngredients) {
-      return [..._baseIngredients, ..._extraIngredients];
-    }
-    return _baseIngredients;
+    if (_allIngredients.isEmpty) return const [];
+    if (_showAllIngredients) return _allIngredients;
+    return _allIngredients.take(_ingredientPreviewCount).toList();
+  }
+
+  List<String> get _queryIngredientSuggestions {
+    final query = _searchController.text.trim().toLowerCase();
+    if (query.isEmpty) return const [];
+
+    return _allIngredients
+        .where(
+          (name) =>
+              !_selectedIngredients.contains(name) &&
+              name.toLowerCase().contains(query),
+        )
+        .take(_maxIngredientSuggestions)
+        .toList();
   }
 
   List<String> get _selectedFiltersInOrder {
@@ -137,7 +153,27 @@ class _SearchPageState extends State<SearchPage> {
     });
   }
 
+  bool get _hasFilterCriteria =>
+      _selectedIngredients.isNotEmpty ||
+      _selectedTags.isNotEmpty ||
+      _isCalorieFilterEnabled;
+
+  bool _validateBeforeSearch() {
+    final query = _searchController.text.trim();
+    if (_hasFilterCriteria || query.length >= 2) return true;
+
+    final message = query.isEmpty
+        ? 'Enter at least 2 characters, or pick an ingredient, tag, or calorie filter.'
+        : 'Enter at least 2 characters to search by title.';
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
+    return false;
+  }
+
   Future<void> _onSearchPressed() async {
+    if (!_validateBeforeSearch()) return;
+
     final criteria = SearchCriteria(
       query: _searchController.text.trim(),
       selectedIngredients: _selectedIngredients.toList(),
@@ -228,6 +264,7 @@ class _SearchPageState extends State<SearchPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    _buildAnimatedIngredientSuggestions(),
                     _buildIngredientsSection(),
                     const SizedBox(height: 24),
                     _buildTagsSection(),
@@ -358,6 +395,84 @@ class _SearchPageState extends State<SearchPage> {
     );
   }
 
+  Widget _buildAnimatedIngredientSuggestions() {
+    final suggestions = _queryIngredientSuggestions;
+    final show = suggestions.isNotEmpty;
+    final suggestionKey = suggestions.join('\u0001');
+
+    return AnimatedSize(
+      duration: _softTransitionDuration,
+      curve: Curves.easeInOutCubic,
+      alignment: Alignment.topCenter,
+      child: AnimatedSwitcher(
+        duration: _softTransitionDuration,
+        switchInCurve: Curves.easeOutCubic,
+        switchOutCurve: Curves.easeInCubic,
+        layoutBuilder: (currentChild, previousChildren) {
+          return Stack(
+            alignment: Alignment.topCenter,
+            children: [
+              ...previousChildren,
+              if (currentChild != null) currentChild,
+            ],
+          );
+        },
+        transitionBuilder: (child, animation) {
+          final slide = Tween<Offset>(
+            begin: const Offset(0, -0.06),
+            end: Offset.zero,
+          ).animate(CurvedAnimation(
+            parent: animation,
+            curve: Curves.easeOutCubic,
+          ));
+          return FadeTransition(
+            opacity: animation,
+            child: SlideTransition(position: slide, child: child),
+          );
+        },
+        child: show
+            ? Padding(
+                key: ValueKey<String>(suggestionKey),
+                padding: const EdgeInsets.only(bottom: 16),
+                child: _buildQueryIngredientSuggestions(suggestions),
+              )
+            : const SizedBox(
+                key: ValueKey<String>('ingredient-suggestions-empty'),
+                width: double.infinity,
+              ),
+      ),
+    );
+  }
+
+  Widget _buildQueryIngredientSuggestions(List<String> suggestions) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Matching ingredients',
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: _designPrimaryColor,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: suggestions
+              .map(
+                (name) => ActionChip(
+                  label: Text(name),
+                  onPressed: () => _toggleIngredient(name),
+                ),
+              )
+              .toList(),
+        ),
+      ],
+    );
+  }
+
   Widget _buildIngredientsSection() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -372,12 +487,15 @@ class _SearchPageState extends State<SearchPage> {
                 fontWeight: FontWeight.w600,
               ),
             ),
-            TextButton(
-              onPressed: () {
-                setState(() {
-                  _showAllIngredients = !_showAllIngredients;
-                });
-              },
+            if (_canExpandIngredients)
+              TextButton(
+              onPressed: _ingredientsLoading
+                  ? null
+                  : () {
+                      setState(() {
+                        _showAllIngredients = !_showAllIngredients;
+                      });
+                    },
               child: AnimatedSwitcher(
                 duration: _softTransitionDuration,
                 switchInCurve: Curves.easeOutCubic,
@@ -404,26 +522,50 @@ class _SearchPageState extends State<SearchPage> {
             ),
           ],
         ),
-        const SizedBox(height: 8),
-        AnimatedSize(
-          duration: _softTransitionDuration,
-          curve: Curves.easeInOutCubic,
-          alignment: Alignment.topCenter,
-          child: Wrap(
-            spacing: 12,
-            runSpacing: 12,
-            children: _visibleIngredients
-                .map(
-                  (ingredient) => FilterToggleChip(
-                    label: ingredient,
-                    isSelected: _selectedIngredients.contains(ingredient),
-                    primaryColor: _designPrimaryColor,
-                    onTap: () => _toggleIngredient(ingredient),
-                  ),
-                )
-                .toList(),
+        if (_usingFallbackIngredients && !_ingredientsLoading) ...[
+          const SizedBox(height: 4),
+          Text(
+            'Showing offline ingredient list.',
+            style: TextStyle(fontSize: 11, color: _designDisabledColor),
           ),
-        ),
+        ],
+        const SizedBox(height: 8),
+        if (_ingredientsLoading)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 12),
+            child: Center(
+              child: SizedBox(
+                width: 22,
+                height: 22,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            ),
+          )
+        else if (_allIngredients.isEmpty)
+          Text(
+            'No ingredients available.',
+            style: TextStyle(fontSize: 13, color: _designDisabledColor),
+          )
+        else
+          AnimatedSize(
+            duration: _softTransitionDuration,
+            curve: Curves.easeInOutCubic,
+            alignment: Alignment.topCenter,
+            child: Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: _visibleIngredients
+                  .map(
+                    (ingredient) => FilterToggleChip(
+                      label: ingredient,
+                      isSelected: _selectedIngredients.contains(ingredient),
+                      primaryColor: _designPrimaryColor,
+                      onTap: () => _toggleIngredient(ingredient),
+                    ),
+                  )
+                  .toList(),
+            ),
+          ),
       ],
     );
   }

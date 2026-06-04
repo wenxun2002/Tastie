@@ -221,6 +221,12 @@ service cloud.firestore {
       allow read: if true;
     }
 
+    // --- Search ingredients (mobile search chips; admin CRUD) ---
+    match /Search_ingredient/{ingredientId} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
+    }
+
     // --- System configs (admin panel settings) ---
     match /system_configs/{configId} {
       allow read, write: if isAdmin();
