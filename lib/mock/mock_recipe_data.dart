@@ -16,8 +16,8 @@ const Map<String, dynamic> mockSmartGeneratedRecipeJson = <String, dynamic>{
     <String, dynamic>{'name': 'Lemon Juice', 'amount': 30, 'unit': 'ml'},
     <String, dynamic>{'name': 'Olive Oil', 'amount': 15, 'unit': 'ml'},
     <String, dynamic>{'name': 'Parmesan', 'amount': 20, 'unit': 'g'},
-    <String, dynamic>{'name': 'Salt', 'amount': 1, 'unit': 'to taste'},
-    <String, dynamic>{'name': 'Black Pepper', 'amount': 1, 'unit': 'to taste'},
+    <String, dynamic>{'name': 'Salt', 'amount': 0, 'unit': 'to taste'},
+    <String, dynamic>{'name': 'Black Pepper', 'amount': 0, 'unit': 'to taste'},
   ],
   'procedures': <String>[
     'Boil salted water and cook spaghetti until al dente.',

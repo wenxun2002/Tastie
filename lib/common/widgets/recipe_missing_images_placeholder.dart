@@ -67,19 +67,26 @@ class RecipeMissingImagesPlaceholder extends StatelessWidget {
       ),
     );
 
+    final decoration = BoxDecoration(
+      color: ColorPlate.disabled,
+      border: compact
+          ? Border.all(color: ColorPlate.borderGrey, width: 0.5)
+          : null,
+    );
+
     if (height != null) {
       return SizedBox(
         width: width,
         height: height,
-        child: ColoredBox(
-          color: ColorPlate.background,
+        child: DecoratedBox(
+          decoration: decoration,
           child: Center(child: content),
         ),
       );
     }
 
-    return ColoredBox(
-      color: ColorPlate.background,
+    return DecoratedBox(
+      decoration: decoration,
       child: AspectRatio(
         aspectRatio: 0.8,
         child: Center(

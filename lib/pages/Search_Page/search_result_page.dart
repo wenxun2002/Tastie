@@ -172,22 +172,33 @@ class _SearchResultPageState extends State<SearchResultPage> {
     await _runSearch();
   }
 
+  void _popWithCriteria() {
+    Navigator.of(context).pop(_criteria);
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xfff3f3f3),
-      body: SafeArea(
-        child: Column(
-          children: [
-            _buildTopBar(),
-            Expanded(
-              child: _isLoading
-                  ? _buildSkeletonGrid()
-                  : _results.isEmpty
-                      ? _buildEmptyState()
-                      : _buildResultGrid(),
-            ),
-          ],
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        _popWithCriteria();
+      },
+      child: Scaffold(
+        backgroundColor: const Color(0xfff3f3f3),
+        body: SafeArea(
+          child: Column(
+            children: [
+              _buildTopBar(),
+              Expanded(
+                child: _isLoading
+                    ? _buildSkeletonGrid()
+                    : _results.isEmpty
+                        ? _buildEmptyState()
+                        : _buildResultGrid(),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -200,7 +211,7 @@ class _SearchResultPageState extends State<SearchResultPage> {
         children: [
           IconButton(
             icon: const Icon(Icons.arrow_back),
-            onPressed: () => Navigator.of(context).maybePop(),
+            onPressed: _popWithCriteria,
           ),
           const SizedBox(width: 4),
           Expanded(

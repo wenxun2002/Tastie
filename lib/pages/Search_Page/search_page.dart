@@ -137,7 +137,7 @@ class _SearchPageState extends State<SearchPage> {
     });
   }
 
-  void _onSearchPressed() {
+  Future<void> _onSearchPressed() async {
     final criteria = SearchCriteria(
       query: _searchController.text.trim(),
       selectedIngredients: _selectedIngredients.toList(),
@@ -153,17 +153,22 @@ class _SearchPageState extends State<SearchPage> {
       return;
     }
 
-    Navigator.of(context).push(
-      MaterialPageRoute<void>(
+    final latest = await Navigator.of(context).push<SearchCriteria>(
+      MaterialPageRoute<SearchCriteria>(
         builder: (_) => SearchResultPage(initialCriteria: criteria),
       ),
     );
+    if (!mounted || latest == null) return;
+    _applyCriteria(latest);
   }
 
   void _hydrateInitialCriteria() {
     final criteria = widget.initialCriteria;
     if (criteria == null) return;
+    _applyCriteria(criteria, rebuild: false);
+  }
 
+  void _applyCriteria(SearchCriteria criteria, {bool rebuild = true}) {
     _searchController.text = criteria.query;
     _selectedIngredients
       ..clear()
@@ -185,6 +190,7 @@ class _SearchPageState extends State<SearchPage> {
     } else {
       _activeCaloriePreset = CaloriePreset.custom;
     }
+    if (rebuild) setState(() {});
   }
 
   void _applyCaloriePreset(CaloriePreset preset) {
@@ -333,6 +339,7 @@ class _SearchPageState extends State<SearchPage> {
         TextField(
           controller: _searchController,
           focusNode: _searchFocusNode,
+          textInputAction: TextInputAction.search,
           style: const TextStyle(
             fontSize: 14,
           ),
@@ -345,6 +352,7 @@ class _SearchPageState extends State<SearchPage> {
           onChanged: (_) {
             setState(() {});
           },
+          onSubmitted: (_) => _onSearchPressed(),
         ),
       ],
     );
