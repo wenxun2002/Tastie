@@ -569,22 +569,20 @@ class _CreatePostPageState extends State<CreatePostPage> {
   }
 
   void _updateNutritionField(String fieldKey, double value) {
-    setState(() {
-      switch (fieldKey) {
-        case 'calories':
-          _nutrition = _nutrition.copyWith(calories: value);
-          break;
-        case 'protein':
-          _nutrition = _nutrition.copyWith(protein: value);
-          break;
-        case 'carbs':
-          _nutrition = _nutrition.copyWith(carbs: value);
-          break;
-        case 'fat':
-          _nutrition = _nutrition.copyWith(fat: value);
-          break;
-      }
-    });
+    switch (fieldKey) {
+      case 'calories':
+        _nutrition = _nutrition.copyWith(calories: value);
+        break;
+      case 'protein':
+        _nutrition = _nutrition.copyWith(protein: value);
+        break;
+      case 'carbs':
+        _nutrition = _nutrition.copyWith(carbs: value);
+        break;
+      case 'fat':
+        _nutrition = _nutrition.copyWith(fat: value);
+        break;
+    }
   }
 
   Widget _loadingCenterCard(ThemeData theme, String message) {
@@ -974,9 +972,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
                   SizedBox(
                     width: 80,
                     child: TextFormField(
-                      key: ValueKey(
-                        '${item.fieldKey}-${_valueForField(item.fieldKey)}',
-                      ),
+                      key: ValueKey(item.fieldKey),
                       initialValue: _valueForField(item.fieldKey) == 0
                           ? ''
                           : _valueForField(item.fieldKey).toString(),
