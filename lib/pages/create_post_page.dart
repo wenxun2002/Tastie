@@ -522,8 +522,10 @@ class _CreatePostPageState extends State<CreatePostPage> {
   void _onIngredientReorder(int oldIndex, int newIndex) {
     setState(() {
       if (newIndex > oldIndex) newIndex -= 1;
-      final entry = _ingredientEntries.removeAt(oldIndex);
-      _ingredientEntries.insert(newIndex, entry);
+      final entries = List<_IngredientEntry>.from(_ingredientEntries);
+      final entry = entries.removeAt(oldIndex);
+      entries.insert(newIndex, entry);
+      _ingredientEntries = entries;
     });
   }
 
@@ -559,8 +561,10 @@ class _CreatePostPageState extends State<CreatePostPage> {
   void _onProcedureReorder(int oldIndex, int newIndex) {
     setState(() {
       if (newIndex > oldIndex) newIndex -= 1;
-      final entry = _procedureEntries.removeAt(oldIndex);
-      _procedureEntries.insert(newIndex, entry);
+      final entries = List<_ProcedureEntry>.from(_procedureEntries);
+      final entry = entries.removeAt(oldIndex);
+      entries.insert(newIndex, entry);
+      _procedureEntries = entries;
     });
   }
 
