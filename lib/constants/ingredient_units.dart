@@ -13,5 +13,20 @@ class IngredientUnits {
   // Normal measurable units.
   static const List<String> normalUnits = ['g', 'kg', 'ml', 'l'];
 
-  static const List<String> allUnits = [...normalUnits, ...specialUnits];
+  // Discrete / kitchen units for countable or portion-based ingredients.
+  static const List<String> countableUnits = [
+    'piece',
+    'slice',
+    'whole',
+    'clove',
+    'tbsp',
+    'tsp',
+    'cup',
+  ];
+
+  static const List<String> allUnits = [
+    ...normalUnits,
+    ...countableUnits,
+    ...specialUnits,
+  ];
 }

@@ -215,6 +215,13 @@ const ALLOWED_UNITS = new Set([
   "kg",
   "ml",
   "l",
+  "piece",
+  "slice",
+  "whole",
+  "clove",
+  "tbsp",
+  "tsp",
+  "cup",
   "a few drops",
   "a pinch",
   "to taste",
@@ -453,18 +460,28 @@ export const smartGenerate = onCall(
       "Hard constraints:",
       "1) Unit Constraint: each ingredient.unit must be EXACTLY one " +
         "of these strings:",
-      "\"g\", \"kg\", \"ml\", \"l\", \"a few drops\", \"a pinch\", " +
-        "\"to taste\", \"as needed\", \"handful\".",
-      "If unit is one of: a few drops, a pinch, to taste, as needed, " +
-        "handful — then amount MUST be 0.",
-      "For g, kg, ml, l use a positive numeric amount appropriate for " +
-        "one recipe.",
+      "\"g\", \"kg\", \"ml\", \"l\", \"piece\", \"slice\", \"whole\", " +
+        "\"clove\", \"tbsp\", \"tsp\", \"cup\", \"a few drops\", " +
+        "\"a pinch\", \"to taste\", \"as needed\", \"handful\".",
       "",
-      "2) Nutrition Constraint: estimate total-dish calories, protein, " +
+      "2) Special Rules for Units & Amounts (CRITICAL):",
+      "- If unit is one of: a few drops, a pinch, to taste, as needed, " +
+        "handful — then amount MUST be 0.",
+      "- For countable items (e.g., strawberries, eggs, tomatoes), use " +
+        "\"whole\" or \"piece\" with the exact count (e.g., amount: 2, " +
+        "unit: \"whole\"). DO NOT use \"g\" for small countable items.",
+      "- For portions of meat, estimate a realistic weight in grams " +
+        "(e.g., 200g, 500g). DO NOT use fractional weights like 0.25g " +
+        "for meat. If the image shows 1/4 of a chicken, output its " +
+        "estimated weight in grams (e.g., 300g).",
+      "- Spices and powders should typically use \"tsp\", \"tbsp\", " +
+        "or \"g\".",
+      "",
+      "3) Nutrition Constraint: estimate total-dish calories, protein, " +
         "carbs, fat with common sense.",
       "All nutrition values must be numbers and >= 0.",
       "",
-      "3) Language Constraint: Regardless of input language (e.g. Chinese),",
+      "4) Language Constraint: Regardless of input language (e.g. Chinese),",
       "ingredient names and procedure steps MUST be written in English only.",
       "",
     ];
