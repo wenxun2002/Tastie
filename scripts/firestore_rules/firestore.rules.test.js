@@ -65,6 +65,20 @@ function baseRecipe(overrides = {}) {
   };
 }
 
+function baseReport(overrides = {}) {
+  return {
+    recipeId: 'r1',
+    recipeTitle: 'Soup',
+    authorUsername: 'Alice',
+    reportedBy: 'alice',
+    reason: 'Spam',
+    description: 'This recipe is spam.',
+    status: 'pending',
+    timestamp: serverTimestamp(),
+    ...overrides,
+  };
+}
+
 describe('firestore.rules', () => {
   before(async () => {
     testEnv = await initializeTestEnvironment({
@@ -199,6 +213,23 @@ describe('firestore.rules', () => {
     unfavoriteBatch.delete(collectionRef);
     unfavoriteBatch.update(recipeRef, {favCount: 0});
     await assertSucceeds(unfavoriteBatch.commit());
+  });
+
+  it('requires report creates to use the authenticated reporter and pending schema', async () => {
+    const alice = authedDb('alice');
+
+    await assertSucceeds(setDoc(doc(alice, 'reports/valid'), baseReport()));
+    await assertFails(setDoc(doc(alice, 'reports/forged-reporter'), baseReport({
+      reportedBy: 'bob',
+    })));
+    await assertFails(setDoc(doc(alice, 'reports/wrong-status'), baseReport({
+      status: 'solved',
+    })));
+    await assertFails(setDoc(doc(alice, 'reports/extra-field'), {
+      ...baseReport(),
+      adminNote: 'hide this from review',
+    }));
+    await assertFails(setDoc(doc(unauthenticatedDb(), 'reports/anonymous'), baseReport()));
   });
 
   it('allows only admins to change report status', async () => {
