@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 import 'package:tastie/constants/color_plate.dart';
 import 'package:tastie/mock/mock_weather.dart';
 import 'package:tastie/models/weather_data.dart';
@@ -45,54 +46,75 @@ class WeatherSelector extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Weather options mapping
-    final weatherOptions = [
-      ('Hot & Humid', MockWeather.weatherHotHumid),
-      ('Hot & Dry', MockWeather.weatherHotDry),
-      ('Rainy', MockWeather.weatherRainy),
-      ('Cold', MockWeather.weatherCold),
-      ('Neutral', MockWeather.weatherNeutral),
-      ('Winter', MockWeather.weatherwinter),
-    ];
+    return GetBuilder<IndexController>(
+      id: 'weather_selector',
+      init: controller,
+      builder: (_) {
+        final weatherOptions = MockWeather.allOptions;
 
-    return Container(
-      color: Colors.white,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      child: DropdownButton<WeatherData>(
-        // 只允许下拉框的 value 使用几个固定的 MockWeather，避免值不在 items 中
-        value: controller.selectorWeather,
-        isExpanded: true,
-        underline: Container(), // Remove default underline
-        items: weatherOptions.map((option) {
-          return DropdownMenuItem<WeatherData>(
-            value: option.$2,
-            child: Text(
-              option.$1,
-              style: ColorPlate.bodyText,
-            ),
-          );
-        }).toList(),
-        onChanged: (WeatherData? newWeather) {
-          if (newWeather != null) {
-            controller.updateWeather(newWeather);
-          }
-        },
-        selectedItemBuilder: (BuildContext context) {
-          return weatherOptions.map((option) {
-            return Container(
-              alignment: Alignment.centerLeft,
-              child: Text(
-                option.$1,
-                style: ColorPlate.bodyText.copyWith(
-                  color: ColorPlate.primary,
-                  fontWeight: FontWeight.w600,
+        return Container(
+          color: Colors.white,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          child: controller.isWeatherSwitching
+              ? Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  child: Row(
+                    children: [
+                      const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: ColorPlate.primary,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          'Updating feed for selected weather…',
+                          style: ColorPlate.bodyText.copyWith(
+                            color: ColorPlate.primary,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+              : DropdownButton<WeatherData>(
+                  value: controller.selectorWeather,
+                  isExpanded: true,
+                  underline: Container(),
+                  items: weatherOptions.map((option) {
+                    return DropdownMenuItem<WeatherData>(
+                      value: option.data,
+                      child: Text(
+                        option.label,
+                        style: ColorPlate.bodyText,
+                      ),
+                    );
+                  }).toList(),
+                  onChanged: (WeatherData? newWeather) {
+                    if (newWeather != null) {
+                      controller.updateWeather(newWeather);
+                    }
+                  },
+                  selectedItemBuilder: (BuildContext context) {
+                    return weatherOptions.map((option) {
+                      return Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          option.label,
+                          style: ColorPlate.bodyText.copyWith(
+                            color: ColorPlate.primary,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      );
+                    }).toList();
+                  },
                 ),
-              ),
-            );
-          }).toList();
-        },
-      ),
+        );
+      },
     );
   }
 }
-

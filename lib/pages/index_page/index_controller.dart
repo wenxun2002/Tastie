@@ -3,6 +3,7 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:tastie/constants/color_plate.dart';
 import 'package:tastie/constants/pages.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:tastie/data/tag_policy.dart';
@@ -60,6 +61,9 @@ class IndexController extends GetxController
 
   /// 下拉选择器中当前展示的“分类天气”（始终是几个 MockWeather 之一）
   WeatherData selectorWeather = MockWeather.weatherNeutral;
+
+  /// True while a manual weather switch is reloading the Explore feed.
+  bool isWeatherSwitching = false;
 
   final RecipeEngagementRepository _engagementRepo = RecipeEngagementRepository();
   /// Cached `users/{uid}/likes/*` doc ids (cap 500) for feed heart state.
@@ -378,26 +382,8 @@ class IndexController extends GetxController
   }
 
   void _syncSelectorMockForCategory(WeatherCategory category) {
-    switch (category) {
-      case WeatherCategory.hotHumid:
-        selectorWeather = MockWeather.weatherHotHumid;
-        break;
-      case WeatherCategory.hotDry:
-        selectorWeather = MockWeather.weatherHotDry;
-        break;
-      case WeatherCategory.rainy:
-        selectorWeather = MockWeather.weatherRainy;
-        break;
-      case WeatherCategory.cold:
-        selectorWeather = MockWeather.weatherCold;
-        break;
-      case WeatherCategory.neutral:
-        selectorWeather = MockWeather.weatherNeutral;
-        break;
-      case WeatherCategory.winter:
-        selectorWeather = MockWeather.weatherwinter;
-        break;
-    }
+    selectorWeather = MockWeather.dataForCategory(category);
+    update(['weather_selector']);
   }
 
   Future<void> _reloadExploreFirstPageWithFilter() async {
@@ -495,16 +481,40 @@ class IndexController extends GetxController
 
   /// 手动选择天气：用本地 [classifyWeather] + [getTagPolicy] 对齐 Tag，并重拉第一页。
   Future<void> updateWeather(WeatherData weather) async {
+    if (isWeatherSwitching) return;
+
+    isWeatherSwitching = true;
     currentWeather = weather;
     selectorWeather = weather;
+    currentLocationName = null;
+    _weatherContextCache = null;
+    _lastWeatherFetchAt = null;
+
     final category = classifyWeather(weather);
     currentWeatherCategory = category;
     final policy = getTagPolicy(category);
     exploreFilterPromotedTags = List<String>.from(policy.promoted.take(10));
     exploreNeutralTags = List<String>.from(policy.neutral);
     exploreSuppressedTags = List<String>.from(policy.suppressed);
-    await _reloadExploreFirstPageWithFilter();
-    update(['post_list']);
+    update(['weather_selector', 'post_list']);
+
+    try {
+      await _reloadExploreFirstPageWithFilter();
+      final label = MockWeather.labelFor(weather);
+      Get.snackbar(
+        'Weather switched',
+        'Demo profile: $label (${category.name})',
+        snackPosition: SnackPosition.BOTTOM,
+        margin: const EdgeInsets.all(12),
+        duration: const Duration(seconds: 2),
+        backgroundColor: Colors.white,
+        colorText: Colors.black87,
+        icon: const Icon(Icons.wb_sunny_outlined, color: ColorPlate.primary),
+      );
+    } finally {
+      isWeatherSwitching = false;
+      update(['weather_selector', 'post_list']);
+    }
   }
 
   void _handleWeatherError(String message) {
@@ -519,6 +529,7 @@ class IndexController extends GetxController
     _weatherContextCache = null;
     _lastWeatherFetchAt = null;
     _notifyFeedOrderUnchanged();
+    update(['weather_selector']);
 
     if (Get.context == null) return;
 
