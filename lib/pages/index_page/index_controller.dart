@@ -36,6 +36,9 @@ class IndexController extends GetxController
   /// neutral 天气：按 [likeCount] 分页的游标。
   DocumentSnapshot<Map<String, dynamic>>? _cursorNeutralPopular;
 
+  /// neutral fallback：旧菜谱可能缺少 `likeCount`，需用 `createdAt` 继续分页。
+  DocumentSnapshot<Map<String, dynamic>>? _cursorNeutralRecentFallback;
+
   /// 非 neutral：三层 tag 共用同一 [DocumentSnapshot] 游标；**每切换阶段必须置 `null`**。
   FetchStage _currentStage = FetchStage.promoted;
   DocumentSnapshot<Map<String, dynamic>>? _lastDoc;
@@ -43,6 +46,7 @@ class IndexController extends GetxController
   /// 跨阶段去重（同一菜谱可命中多组 tag）。
   final Set<String> _exploreSeenIds = <String>{};
   bool _neutralRemoteHasMore = true;
+  bool _neutralRecentFallbackHasMore = true;
 
   /// Whether another page may exist after [data].
   bool hasMore = true;
@@ -96,10 +100,12 @@ class IndexController extends GetxController
 
   void _resetExplorePaginationState() {
     _cursorNeutralPopular = null;
+    _cursorNeutralRecentFallback = null;
     _currentStage = FetchStage.promoted;
     _lastDoc = null;
     _exploreSeenIds.clear();
     _neutralRemoteHasMore = true;
+    _neutralRecentFallbackHasMore = true;
   }
 
   List<String>? _tagsForFetchStage(FetchStage stage) {
@@ -114,38 +120,90 @@ class IndexController extends GetxController
     return List<String>.from(raw.take(10));
   }
 
-  /// neutral 天气：不按 tag，`likeCount` 降序分页。
+  /// neutral 天气：优先按 `likeCount` 降序；缺字段的旧菜谱用 `createdAt` 兜底。
   Future<void> _pullNeutralPopularBatch({required bool forLoadMore}) async {
     final repository = FirestoreIndexRepository();
     int added = 0;
-    int loops = 0;
-    var cursor = forLoadMore ? _cursorNeutralPopular : null;
-    var remoteHasMore = _neutralRemoteHasMore;
 
-    while (added < _pageSize && loops < _maxNeutralFetchLoops) {
+    if (_neutralRemoteHasMore) {
+      int loops = 0;
+      var cursor = forLoadMore ? _cursorNeutralPopular : null;
+      var remoteHasMore = _neutralRemoteHasMore;
+
+      while (added < _pageSize && loops < _maxNeutralFetchLoops) {
+        loops++;
+        final page = await repository.getPostsPaginated(
+          limit: _pageSize,
+          startAfterDocument: cursor,
+          filterTags: null,
+          sort: ExploreFeedSort.byLikeCountDesc,
+        );
+        cursor = page.lastDocument;
+        _cursorNeutralPopular = cursor;
+        remoteHasMore = page.hasMore;
+
+        for (final item in page.items) {
+          if (_exploreSeenIds.add(item.id)) {
+            data.add(item);
+            added++;
+            if (added >= _pageSize) break;
+          }
+        }
+        if (added >= _pageSize) break;
+        if (!page.hasMore) break;
+      }
+
+      _neutralRemoteHasMore = remoteHasMore;
+    }
+
+    if (added < _pageSize && !_neutralRemoteHasMore) {
+      await _pullNeutralRecentFallbackBatch(
+        repository: repository,
+        remaining: _pageSize - added,
+        forLoadMore: forLoadMore,
+      );
+    }
+
+    hasMore = _neutralRemoteHasMore || _neutralRecentFallbackHasMore;
+  }
+
+  Future<int> _pullNeutralRecentFallbackBatch({
+    required FirestoreIndexRepository repository,
+    required int remaining,
+    required bool forLoadMore,
+  }) async {
+    if (remaining <= 0 || !_neutralRecentFallbackHasMore) return 0;
+
+    int added = 0;
+    int loops = 0;
+    var cursor = forLoadMore ? _cursorNeutralRecentFallback : null;
+    var remoteHasMore = _neutralRecentFallbackHasMore;
+
+    while (added < remaining && loops < _maxNeutralFetchLoops) {
       loops++;
       final page = await repository.getPostsPaginated(
         limit: _pageSize,
         startAfterDocument: cursor,
         filterTags: null,
-        sort: ExploreFeedSort.byLikeCountDesc,
+        sort: ExploreFeedSort.byCreatedAtDesc,
       );
       cursor = page.lastDocument;
-      _cursorNeutralPopular = cursor;
+      _cursorNeutralRecentFallback = cursor;
       remoteHasMore = page.hasMore;
 
       for (final item in page.items) {
         if (_exploreSeenIds.add(item.id)) {
           data.add(item);
           added++;
-          if (added >= _pageSize) break;
+          if (added >= remaining) break;
         }
       }
-      if (added >= _pageSize) break;
+      if (added >= remaining) break;
       if (!page.hasMore) break;
     }
-    _neutralRemoteHasMore = remoteHasMore;
-    hasMore = remoteHasMore;
+
+    _neutralRecentFallbackHasMore = remoteHasMore;
+    return added;
   }
 
   /// 单次 Firestore 拉取（当前 [_currentStage]），并在 `items.length < limit` 时瀑布降级。
