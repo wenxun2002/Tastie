@@ -438,7 +438,7 @@ class IndexController extends GetxController
 
   /// 触底加载：neutral 按点赞序；非 neutral 按 [FetchStage]（promoted → neutral → suppressed）。
   Future<void> loadMorePosts() async {
-    if (!hasMore || isFetchingMore) return;
+    if (!hasMore || isFetchingMore || isWeatherSwitching) return;
 
     if (currentWeatherCategory == WeatherCategory.neutral) {
       isFetchingMore = true;
@@ -484,6 +484,8 @@ class IndexController extends GetxController
     if (isWeatherSwitching) return;
 
     isWeatherSwitching = true;
+    isInitialLoading = true;
+    isDataReady = false;
     currentWeather = weather;
     selectorWeather = weather;
     currentLocationName = null;
@@ -496,6 +498,10 @@ class IndexController extends GetxController
     exploreFilterPromotedTags = List<String>.from(policy.promoted.take(10));
     exploreNeutralTags = List<String>.from(policy.neutral);
     exploreSuppressedTags = List<String>.from(policy.suppressed);
+    data = [];
+    _resetExplorePaginationState();
+    hasMore = true;
+    isFetchingMore = false;
     update(['weather_selector', 'post_list']);
 
     try {
@@ -512,6 +518,7 @@ class IndexController extends GetxController
         icon: const Icon(Icons.wb_sunny_outlined, color: ColorPlate.primary),
       );
     } finally {
+      isDataReady = true;
       isWeatherSwitching = false;
       update(['weather_selector', 'post_list']);
     }
