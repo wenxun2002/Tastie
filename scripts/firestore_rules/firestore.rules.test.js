@@ -128,6 +128,28 @@ describe('firestore.rules', () => {
     await assertSucceeds(getDoc(doc(authedDb('admin'), 'users/alice')));
   });
 
+  it('allows only admins to change user moderation status', async () => {
+    await seedDoc('users/admin', {uid: 'admin', role: 'admin'});
+    await seedDoc('users/alice', {
+      uid: 'alice',
+      email: 'alice@example.com',
+      status: 'active',
+    });
+
+    await assertFails(updateDoc(doc(authedDb('alice'), 'users/alice'), {
+      status: 'banned',
+    }));
+    await assertFails(updateDoc(doc(authedDb('bob'), 'users/alice'), {
+      status: 'banned',
+    }));
+    await assertSucceeds(updateDoc(doc(authedDb('admin'), 'users/alice'), {
+      status: 'banned',
+    }));
+    await assertSucceeds(updateDoc(doc(authedDb('admin'), 'users/alice'), {
+      status: 'active',
+    }));
+  });
+
   it('allows only admins to change recipe moderation status', async () => {
     await seedDoc('users/admin', {uid: 'admin', role: 'admin'});
     await seedDoc('recipes/r1', baseRecipe());

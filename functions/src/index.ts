@@ -31,6 +31,7 @@ import {
 } from "firebase-functions/v2/firestore";
 
 export {getWeatherContext} from "./weatherContext";
+export {moderateUserOnStatusChange} from "./userModeration";
 
 setGlobalOptions({maxInstances: 10});
 initializeApp();

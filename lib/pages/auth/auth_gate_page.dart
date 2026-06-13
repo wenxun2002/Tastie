@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:tastie/constants/color_plate.dart';
 import 'package:tastie/pages/auth/auth_controller.dart';
 import 'package:tastie/pages/auth/login_page.dart';
@@ -11,29 +10,25 @@ class AuthGatePage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    Get.put(AuthController(), permanent: true);
+    final AuthController controller = Get.put(AuthController(), permanent: true);
 
-    return StreamBuilder<User?>(
-      stream: FirebaseAuth.instance.authStateChanges(),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Scaffold(
-            backgroundColor: ColorPlate.secondary,
-            body: Center(
-              child: CircularProgressIndicator(
-                color: ColorPlate.primary,
-              ),
+    return Obx(() {
+      if (controller.isSessionLoading.value) {
+        return const Scaffold(
+          backgroundColor: ColorPlate.secondary,
+          body: Center(
+            child: CircularProgressIndicator(
+              color: ColorPlate.primary,
             ),
-          );
-        }
+          ),
+        );
+      }
 
-        if (snapshot.hasData) {
-          return HomePage();
-        }
+      if (controller.currentUser.value != null) {
+        return HomePage();
+      }
 
-        return const LoginPage();
-      },
-    );
+      return const LoginPage();
+    });
   }
 }
-

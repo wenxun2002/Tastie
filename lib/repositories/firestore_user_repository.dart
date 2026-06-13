@@ -2,6 +2,9 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 class FirestoreUserRepository {
+  static const String bannedAccountMessage =
+      'Your account has been banned. Please contact support if you believe this is an error.';
+
   final FirebaseFirestore _db;
   final String collectionPath;
 
@@ -9,6 +12,21 @@ class FirestoreUserRepository {
     FirebaseFirestore? db,
     this.collectionPath = 'users',
   }) : _db = db ?? FirebaseFirestore.instance;
+
+  /// Returns true when the Firestore profile is marked as banned.
+  Future<bool> isBanned(String uid) async {
+    final snap = await _db.collection(collectionPath).doc(uid).get();
+    if (!snap.exists) return false;
+    final data = snap.data();
+    if (data == null) return false;
+    final status = (data['status'] ?? 'active').toString().toLowerCase();
+    return status == 'banned';
+  }
+
+  /// Live profile updates for moderation enforcement while signed in.
+  Stream<DocumentSnapshot<Map<String, dynamic>>> watchUserProfile(String uid) {
+    return _db.collection(collectionPath).doc(uid).snapshots();
+  }
 
   /// Creates/updates the user profile document.
   ///
