@@ -595,6 +595,13 @@ export const getWeatherContext = onCall(
     cors: true,
   },
   async (request) => {
+    if (!request.auth?.uid) {
+      throw new HttpsError(
+        "unauthenticated",
+        "You must be signed in to use weather context.",
+      );
+    }
+
     const apiKey = process.env.OPENWEATHER_API_KEY?.trim() ?? "";
     if (!apiKey) {
       logger.error("OPENWEATHER_API_KEY is not set");
