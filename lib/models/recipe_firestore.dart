@@ -76,14 +76,40 @@ class RecipeFirestore {
 
   Map<String, dynamic> toFirestore() => toJson();
 
+  static Map<String, dynamic> _asStringKeyedMap(dynamic value) {
+    if (value is! Map) return const <String, dynamic>{};
+    return value.map((key, value) => MapEntry(key.toString(), value));
+  }
+
+  static List<String> _asStringList(dynamic value) {
+    if (value is! List) return const <String>[];
+    return value.map((item) => item.toString()).toList(growable: false);
+  }
+
+  static List<Map<String, dynamic>> _parseIngredients(dynamic value) {
+    if (value is! List) return const <Map<String, dynamic>>[];
+    return value
+        .whereType<Map>()
+        .map((item) => item.map((key, value) => MapEntry(key.toString(), value)))
+        .toList(growable: false);
+  }
+
+  static int _asInt(dynamic value) {
+    return value is num ? value.toInt() : 0;
+  }
+
+  static String _asString(dynamic value) {
+    return value is String ? value : '';
+  }
+
   static RecipeClickMetrics _parseClickMetrics(Map<String, dynamic> data) {
     final raw = data['click_metrics'];
     if (raw is Map) {
       return RecipeClickMetrics.fromFirestoreMap(
-        Map<String, dynamic>.from(raw),
+        _asStringKeyedMap(raw),
       );
     }
-    final legacy = (data['clicked'] as num?)?.toInt() ?? 0;
+    final legacy = _asInt(data['clicked']);
     return RecipeClickMetrics(
       weatherPromoted: 0,
       weatherNotPromoted: 0,
@@ -95,35 +121,25 @@ class RecipeFirestore {
 
   /// Build from Firestore document (doc.id + doc.data()).
   factory RecipeFirestore.fromFirestore(String docId, Map<String, dynamic> data) {
-    final author = data['author'] as Map<String, dynamic>? ?? {};
-    final ingredients = (data['ingredients'] as List<dynamic>?)
-            ?.map((e) => Map<String, dynamic>.from(e as Map))
-            .toList() ??
-        [];
+    final author = _asStringKeyedMap(data['author']);
     return RecipeFirestore(
       id: docId,
-      userId: data['userId'] as String? ?? '',
-      authorNickname: author['nickname'] as String? ?? '',
-      authorAvatar: author['avatar'] as String? ?? '',
-      imageUrls: (data['imageUrls'] as List<dynamic>?)
-              ?.map((e) => e.toString())
-              .toList() ??
-          [],
-      title: data['title'] as String? ?? '',
-      content: data['content'] as String? ?? '',
-      tags: (data['tags'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [],
-      ingredients: ingredients,
-      procedures: (data['procedures'] as List<dynamic>?)
-              ?.map((e) => e.toString())
-              .toList() ??
-          [],
-      nutrition: data['nutrition'] != null
-          ? Map<String, dynamic>.from(data['nutrition'] as Map)
+      userId: _asString(data['userId']),
+      authorNickname: _asString(author['nickname']),
+      authorAvatar: _asString(author['avatar']),
+      imageUrls: _asStringList(data['imageUrls']),
+      title: _asString(data['title']),
+      content: _asString(data['content']),
+      tags: _asStringList(data['tags']),
+      ingredients: _parseIngredients(data['ingredients']),
+      procedures: _asStringList(data['procedures']),
+      nutrition: data['nutrition'] is Map
+          ? _asStringKeyedMap(data['nutrition'])
           : null,
-      likeCount: (data['likeCount'] as num?)?.toInt() ?? 0,
-      favCount: (data['favCount'] as num?)?.toInt() ?? 0,
-      commentCount: (data['commentCount'] as num?)?.toInt() ?? 0,
-      status: data['status'] as String?,
+      likeCount: _asInt(data['likeCount']),
+      favCount: _asInt(data['favCount']),
+      commentCount: _asInt(data['commentCount']),
+      status: data['status'] is String ? data['status'] as String : null,
       clickMetrics: _parseClickMetrics(data),
       createdAt: data['createdAt'],
     );

@@ -26,7 +26,11 @@ class RecipeClickMetrics {
       };
 
   factory RecipeClickMetrics.fromFirestoreMap(Map<String, dynamic> data) {
-    int read(String key) => (data[key] as num?)?.toInt() ?? 0;
+    int read(String key) {
+      final value = data[key];
+      return value is num ? value.toInt() : 0;
+    }
+
     return RecipeClickMetrics(
       weatherPromoted: read('weather_promoted'),
       weatherNotPromoted: read('weather_notpromoted'),

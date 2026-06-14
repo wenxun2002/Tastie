@@ -48,6 +48,12 @@ function baseRecipe(overrides = {}) {
     tags: ['soup'],
     ingredients: [],
     procedures: [],
+    nutrition: {
+      calories: 10,
+      protein: 1,
+      carbs: 2,
+      fat: 3,
+    },
     likeCount: 0,
     favCount: 0,
     commentCount: 0,
@@ -174,6 +180,34 @@ describe('firestore.rules', () => {
     await assertFails(updateDoc(recipeRef, {authorUid: 'bob'}));
     await assertFails(updateDoc(recipeRef, {likeCount: 999}));
     await assertFails(updateDoc(recipeRef, {clicked: 999}));
+  });
+
+  it('validates public recipe field shapes on create and owner update', async () => {
+    await seedDoc('users/alice', {uid: 'alice', status: 'active'});
+    const alice = authedDb('alice');
+    const validRef = doc(alice, 'recipes/valid');
+
+    await assertSucceeds(setDoc(validRef, baseRecipe({
+      createdAt: serverTimestamp(),
+    })));
+
+    await assertFails(setDoc(doc(alice, 'recipes/badImageUrls'), baseRecipe({
+      imageUrls: 'not-a-list',
+      createdAt: serverTimestamp(),
+    })));
+    await assertFails(setDoc(doc(alice, 'recipes/badAuthor'), baseRecipe({
+      author: 'not-a-map',
+      createdAt: serverTimestamp(),
+    })));
+    await assertFails(setDoc(doc(alice, 'recipes/badNutrition'), baseRecipe({
+      nutrition: 'not-a-map',
+      createdAt: serverTimestamp(),
+    })));
+
+    await assertSucceeds(updateDoc(validRef, {title: 'Tomato soup'}));
+    await assertFails(updateDoc(validRef, {imageUrls: 'not-a-list'}));
+    await assertFails(updateDoc(validRef, {author: {nickname: 123}}));
+    await assertFails(updateDoc(validRef, {nutrition: {calories: 'many'}}));
   });
 
   it('requires like count changes to be coupled with the like document', async () => {

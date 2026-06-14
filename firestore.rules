@@ -52,6 +52,52 @@ service cloud.firestore {
           ));
       }
 
+      function recipeAuthorValid() {
+        let author = request.resource.data.author;
+        return author is map
+          && author.keys().hasOnly(['nickname', 'avatar'])
+          && (!author.keys().hasAny(['nickname']) || author.nickname is string)
+          && (!author.keys().hasAny(['avatar']) || author.avatar is string);
+      }
+
+      function recipeNutritionValid() {
+        let nutrition = request.resource.data.nutrition;
+        return nutrition is map
+          && nutrition.keys().hasOnly([
+            'calories', 'protein', 'carbs', 'fat', 'fiber', 'sugar'
+          ])
+          && (!nutrition.keys().hasAny(['calories']) || nutrition.calories is number)
+          && (!nutrition.keys().hasAny(['protein']) || nutrition.protein is number)
+          && (!nutrition.keys().hasAny(['carbs']) || nutrition.carbs is number)
+          && (!nutrition.keys().hasAny(['fat']) || nutrition.fat is number)
+          && (!nutrition.keys().hasAny(['fiber']) || nutrition.fiber is number)
+          && (!nutrition.keys().hasAny(['sugar']) || nutrition.sugar is number);
+      }
+
+      function recipePublicFieldsValid() {
+        let d = request.resource.data;
+        return d.userId is string
+          && (!d.keys().hasAny(['authorUid']) || d.authorUid is string)
+          && (!d.keys().hasAny(['author']) || recipeAuthorValid())
+          && (!d.keys().hasAny(['imageUrls']) || d.imageUrls is list)
+          && (!d.keys().hasAny(['title']) || d.title is string)
+          && (!d.keys().hasAny(['content']) || d.content is string)
+          && (!d.keys().hasAny(['tags']) || d.tags is list)
+          && (!d.keys().hasAny(['ingredients']) || d.ingredients is list)
+          && (!d.keys().hasAny(['procedures']) || d.procedures is list)
+          && (!d.keys().hasAny(['nutrition']) || recipeNutritionValid())
+          && (!d.keys().hasAny(['createdAt']) || d.createdAt is timestamp);
+      }
+
+      function recipeCreateKeysValid() {
+        return request.resource.data.keys().hasOnly([
+          'userId', 'authorUid', 'author', 'imageUrls', 'title', 'content',
+          'tags', 'ingredients', 'procedures', 'nutrition',
+          'likeCount', 'favCount', 'commentCount', 'clicked',
+          'click_metrics', 'status', 'createdAt'
+        ]);
+      }
+
       function recipeCreateAllowed() {
         let d = request.resource.data;
         return isSignedIn()
@@ -59,6 +105,8 @@ service cloud.firestore {
           && d.userId == request.auth.uid
           && (!d.keys().hasAny(['authorUid']) || d.authorUid == request.auth.uid)
           && (!d.keys().hasAny(['status']) || d.status == 'active')
+          && recipeCreateKeysValid()
+          && recipePublicFieldsValid()
           && recipeCreateCountersValid();
       }
 
@@ -69,7 +117,8 @@ service cloud.firestore {
           && affected.hasOnly([
             'author', 'imageUrls', 'title', 'content', 'tags',
             'ingredients', 'procedures', 'nutrition'
-          ]);
+          ])
+          && recipePublicFieldsValid();
       }
 
       function likeCountChangeValid() {
