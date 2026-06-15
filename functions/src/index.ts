@@ -18,7 +18,7 @@
 
 import type {InlineDataPart, Part, Schema} from "@google/generative-ai";
 import {GoogleGenerativeAI, SchemaType} from "@google/generative-ai";
-import {initializeApp} from "firebase-admin/app";
+import {getApps, initializeApp} from "firebase-admin/app";
 import type {DocumentData, Query} from "firebase-admin/firestore";
 import {FieldValue, Timestamp, getFirestore} from "firebase-admin/firestore";
 import {setGlobalOptions} from "firebase-functions";
@@ -34,7 +34,9 @@ export {getWeatherContext} from "./weatherContext";
 export {moderateUserOnStatusChange} from "./userModeration";
 
 setGlobalOptions({maxInstances: 10});
-initializeApp();
+if (getApps().length === 0) {
+  initializeApp();
+}
 
 const db = getFirestore();
 const MYT_OFFSET_MS = 8 * 60 * 60 * 1000;
