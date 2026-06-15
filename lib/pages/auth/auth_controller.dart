@@ -57,12 +57,15 @@ class AuthController extends GetxController {
       currentUser.value = user;
       isSessionLoading.value = false;
       _bindProfileListener(user.uid);
-      _userRepository.upsertFromAuthUser(user);
+      unawaited(_userRepository.upsertFromAuthUser(user));
     } catch (_) {
-      await _handleBannedAccount(showDialog: false);
+      currentUser.value = user;
+      isSessionLoading.value = false;
+      _bindProfileListener(user.uid);
+      unawaited(_userRepository.upsertFromAuthUser(user));
       Get.snackbar(
-        'Sign-in blocked',
-        'Unable to verify account status. Please try again later.',
+        'Account status unavailable',
+        'We could not verify your account status. Some actions may be limited until connectivity is restored.',
         snackPosition: SnackPosition.BOTTOM,
       );
     }

@@ -8,6 +8,7 @@ const {
 } = require('@firebase/rules-unit-testing');
 const {
   doc,
+  deleteDoc,
   getDoc,
   serverTimestamp,
   setDoc,
@@ -166,6 +167,7 @@ describe('firestore.rules', () => {
   });
 
   it('prevents recipe owners from reassigning ownership or counters', async () => {
+    await seedDoc('users/alice', {uid: 'alice', status: 'active'});
     await seedDoc('recipes/r1', baseRecipe());
     const recipeRef = doc(authedDb('alice'), 'recipes/r1');
 
@@ -174,6 +176,15 @@ describe('firestore.rules', () => {
     await assertFails(updateDoc(recipeRef, {authorUid: 'bob'}));
     await assertFails(updateDoc(recipeRef, {likeCount: 999}));
     await assertFails(updateDoc(recipeRef, {clicked: 999}));
+  });
+
+  it('prevents banned recipe owners from mutating or deleting their recipes', async () => {
+    await seedDoc('users/alice', {uid: 'alice', status: 'banned'});
+    await seedDoc('recipes/r1', baseRecipe());
+    const recipeRef = doc(authedDb('alice'), 'recipes/r1');
+
+    await assertFails(updateDoc(recipeRef, {title: 'Tomato soup'}));
+    await assertFails(deleteDoc(recipeRef));
   });
 
   it('requires like count changes to be coupled with the like document', async () => {

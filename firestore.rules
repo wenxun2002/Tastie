@@ -65,6 +65,7 @@ service cloud.firestore {
       function recipeOwnerUpdateAllowed() {
         let affected = request.resource.data.diff(resource.data).affectedKeys();
         return isSignedIn()
+          && isNotBannedUser()
           && resource.data.userId == request.auth.uid
           && affected.hasOnly([
             'author', 'imageUrls', 'title', 'content', 'tags',
@@ -139,7 +140,9 @@ service cloud.firestore {
         || recipeCounterUpdateAllowed()
         || recipeAdminStatusUpdateAllowed()
         || recipeAdminAuthorUpdateAllowed();
-      allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow delete: if isSignedIn()
+        && isNotBannedUser()
+        && resource.data.userId == request.auth.uid;
     }
 
     // --- User profile + per-user likes / collections ---
