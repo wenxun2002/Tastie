@@ -18,7 +18,7 @@ import 'package:tastie/utils/weather_classifier.dart';
 import 'package:tastie/models/recipe_click_weather_snapshot.dart';
 import 'package:tastie/services/recipe_analytics_service.dart';
 
-/// 非 neutral 天气下 Explore 的瀑布降级：promoted → neutral → suppressed → 结束。
+/// waterfall downgrade for Explore in non-neutral weather: promoted → neutral → suppressed → done.
 enum FetchStage { promoted, neutral, suppressed, done }
 
 class IndexController extends GetxController
@@ -33,14 +33,14 @@ class IndexController extends GetxController
   bool isDataReady = false; // Data fetched from backend
   WeatherData currentWeather = MockWeather.weatherNeutral; // Default weather
 
-  /// neutral 天气：按 [likeCount] 分页的游标。
+  /// neutral weather: cursor for [likeCount] descending order pagination.
   DocumentSnapshot<Map<String, dynamic>>? _cursorNeutralPopular;
 
-  /// 非 neutral：三层 tag 共用同一 [DocumentSnapshot] 游标；**每切换阶段必须置 `null`**。
+  /// non-neutral: three layers of tags share the same [DocumentSnapshot] cursor; **must be set to `null` for each stage switch**.
   FetchStage _currentStage = FetchStage.promoted;
   DocumentSnapshot<Map<String, dynamic>>? _lastDoc;
 
-  /// 跨阶段去重（同一菜谱可命中多组 tag）。
+  /// deduplication across stages (a recipe can hit multiple tags).
   final Set<String> _exploreSeenIds = <String>{};
   bool _neutralRemoteHasMore = true;
 
@@ -53,13 +53,13 @@ class IndexController extends GetxController
   DateTime? _lastWeatherFetchAt;
   WeatherContextDto? _weatherContextCache;
 
-  /// BFF 天气分类 + Tag 角色（分层 / 过滤用）
+  /// BFF weather classification + Tag role (for hierarchical / filtering)
   WeatherCategory currentWeatherCategory = WeatherCategory.neutral;
   List<String> exploreFilterPromotedTags = [];
   List<String> exploreNeutralTags = [];
   List<String> exploreSuppressedTags = [];
 
-  /// 下拉选择器中当前展示的“分类天气”（始终是几个 MockWeather 之一）
+  /// the current displayed "classified weather" in the dropdown selector (always one of the MockWeathers)
   WeatherData selectorWeather = MockWeather.weatherNeutral;
 
   /// True while a manual weather switch is reloading the Explore feed.
@@ -114,7 +114,7 @@ class IndexController extends GetxController
     return List<String>.from(raw.take(10));
   }
 
-  /// neutral 天气：不按 tag，`likeCount` 降序分页。
+  /// neutral weather: not by tag, `likeCount` descending order pagination.
   Future<void> _pullNeutralPopularBatch({required bool forLoadMore}) async {
     final repository = FirestoreIndexRepository();
     int added = 0;
@@ -148,8 +148,8 @@ class IndexController extends GetxController
     hasMore = remoteHasMore;
   }
 
-  /// 单次 Firestore 拉取（当前 [_currentStage]），并在 `items.length < limit` 时瀑布降级。
-  /// 返回本次**新加入列表**的去重条数。
+  /// single Firestore fetch (current [_currentStage]), and waterfall downgrade when `items.length < limit`.
+  /// return the number of deduplicated items added to the list in this fetch.
   Future<int> _appendOneWeatherTaggedPage() async {
     if (_currentStage == FetchStage.done) return 0;
 
@@ -209,7 +209,7 @@ class IndexController extends GetxController
     return appended;
   }
 
-  /// 首屏 / 刷新：非 neutral 时填满约 [_pageSize] 条，不足则静默 promoted → neutral → suppressed。
+  /// first screen / refresh: non-neutral fill up to about [_pageSize] items, if not enough, silently promoted → neutral → suppressed.
   Future<void> _bootstrapWeatherTaggedFeed() async {
     _currentStage = FetchStage.promoted;
     _lastDoc = null;
@@ -288,10 +288,10 @@ class IndexController extends GetxController
     update(['post_list']);
   }
 
-  /// 通过 BFF [getWeatherContext] 刷新天气与 Tag 策略；必要时重拉第一页 Explore。
+  /// refresh weather and tag policy through BFF [getWeatherContext]; if needed refresh 1st pageExplore。
   ///
-  /// - 缓存 60 分钟内且 [forceRefresh] 为 false 时只恢复状态，不触发网络请求、不重拉 Feed；
-  /// - [forceRefresh] 为 true 时会重新请求 Callable 并重拉第一页。
+  /// - if cached within 60 minutes and [forceRefresh] is false, only restore state, no network request, no reload Feed;
+  /// - [forceRefresh] is true, it will re-request Callable and reload first page.
   Future<void> loadWeatherData({bool forceRefresh = false}) async {
     if (!forceRefresh && _isWeatherCacheValid) {
       _applyWeatherContextDto(_weatherContextCache!);
@@ -436,7 +436,7 @@ class IndexController extends GetxController
     }
   }
 
-  /// 触底加载：neutral 按点赞序；非 neutral 按 [FetchStage]（promoted → neutral → suppressed）。
+  /// bottom load: neutral by like count; non-neutral by [FetchStage] (promoted → neutral → suppressed).
   Future<void> loadMorePosts() async {
     if (!hasMore || isFetchingMore) return;
 
@@ -479,7 +479,7 @@ class IndexController extends GetxController
     update(['post_list']);
   }
 
-  /// 手动选择天气：用本地 [classifyWeather] + [getTagPolicy] 对齐 Tag，并重拉第一页。
+  /// manually select weather: align tags with local [classifyWeather] + [getTagPolicy], and reload first page.
   Future<void> updateWeather(WeatherData weather) async {
     if (isWeatherSwitching) return;
 
@@ -533,7 +533,7 @@ class IndexController extends GetxController
 
     if (Get.context == null) return;
 
-    // 这里的 Neutral 是由错误触发的默认回退，而不是 API 返回的真实天气
+    // the Neutral here is the default fallback due to error, not the real weather returned by the API
     const fallbackCategory = WeatherCategory.neutral;
     // ignore: avoid_print
     print('[Weather] Category (fallback due to error): $fallbackCategory');
@@ -553,7 +553,7 @@ class IndexController extends GetxController
           FilledButton(
             onPressed: () {
               Get.back();
-              // 强制刷新，忽略缓存
+              // for force refresh
               loadWeatherData(forceRefresh: true);
             },
             child: const Text('Retry'),

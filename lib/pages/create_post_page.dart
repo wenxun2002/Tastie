@@ -371,7 +371,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
   }
 
   Future<void> _submit() async {
-    // 1. 本地校验（不触发网络）
+    // 1. local validation (no network trigger)
     final data = _buildCreatePostData();
     if (data.title.trim().isEmpty) {
       if (context.mounted) {
@@ -394,7 +394,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
       return;
     }
 
-    // 2. 进入提交状态
+    // 2.  Enter submission state
     setState(() {
       _isSubmitting = true;
       _submitError = null;
@@ -414,13 +414,15 @@ class _CreatePostPageState extends State<CreatePostPage> {
 
       if (!context.mounted) return;
 
-      // 提交成功：先返回上一页（Home / Me），并给上一页一个 result
+      
+      // Submit success: first return to the previous page (Home / Me), and give the previous page a result
       Navigator.pop(context, true);
 
-      // 回到 Home 后刷新 feed（不阻塞当前页面关闭）
+
+      // After returning to Home, refresh the feed (without blocking the current page from closing)
       Future.microtask(() async {
         try {
-          // 确保切到 Home tab
+          // Ensure switch to Home tab
           final home = Get.find<HomeController>();
           home.onChangePage(0);
         } catch (_) {}

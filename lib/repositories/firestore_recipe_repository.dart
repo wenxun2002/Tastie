@@ -69,7 +69,7 @@ class FirestoreRecipeRepository {
 
   /// Lists all **public-catalog** recipes, newest first (excludes banned)。
   ///
-  /// 不在 Firestore 层按 `status` 查询（旧文档可能无该字段）；拉全表后在内存中过滤。
+  /// Not querying by `status` in Firestore layer (old documents may not have this field); filtering in memory after pulling the full table. 
   Future<List<RecipeFirestore>> getAll() async {
     final snapshot =
         await _db.collection(_collection).orderBy('createdAt', descending: true).get();

@@ -3,14 +3,14 @@ import 'package:tastie/models/card_data.dart';
 import 'package:tastie/repositories/paginated_posts_result.dart';
 import 'package:tastie/utils/recipe_catalog_policy.dart';
 
-/// Explore 列表排序字段（Firestore `orderBy`）。
+/// Sort fields for Explore list (Firestore `orderBy`).
 enum ExploreFeedSort {
-  /// `orderBy('createdAt', descending: true)` — 非 neutral 天气各 tag 层内默认。
+  /// `orderBy('createdAt', descending: true)` — non-neutral weather, default within each tag layer.
   byCreatedAtDesc,
 
-  /// `orderBy('likeCount', descending: true)` — **neutral** 天气全库按热度。
+  /// `orderBy('likeCount', descending: true)` — **neutral** weather, all library by popularity.
   ///
-  /// 需保证 `recipes` 文档含数值字段 `likeCount`（或仅参与排序的文档含该字段）。
+  /// Ensure `recipes` documents contain the numeric field `likeCount` (or only documents participating in sorting contain this field).
   byLikeCountDesc,
 }
 
@@ -23,12 +23,12 @@ class FirestoreIndexRepository {
     this.collectionPath = 'recipes',
   }) : _db = db ?? FirebaseFirestore.instance;
 
-  /// Explore feed：可选 `tags` 过滤 + 分页游标 + 排序。
+  /// Explore feed: optional `tags` filter + pagination cursor + sorting.
   ///
-  /// **索引提示**
-  /// - `arrayContainsAny` + `orderBy('createdAt')` → 复合索引：`tags` + `createdAt` 降序。
-  /// - 仅 `orderBy('likeCount')`、无 `where` → 通常自动单字段索引；若控制台提示再建。
-  /// - `arrayContainsAny` + `orderBy('likeCount')` → 需复合索引（当前 neutral 不按标签过滤）。
+  /// **Index hints**
+  /// - `arrayContainsAny` + `orderBy('createdAt')` → composite index: `tags` + `createdAt` descending.
+  /// - Only `orderBy('likeCount')`, no `where` → typically auto-single-field index; if console prompts, rebuild.
+  /// - `arrayContainsAny` + `orderBy('likeCount')` → composite index (current neutral does not filter by tags).
   Future<PaginatedPostsResult> getPostsPaginated({
     int limit = 10,
     DocumentSnapshot<Map<String, dynamic>>? startAfterDocument,
@@ -39,7 +39,7 @@ class FirestoreIndexRepository {
         ? 'likeCount'
         : 'createdAt';
 
-    /// 多取一些再过滤 `banned`，避免「一页 10 条里多条被封」时露不出足够卡片。
+    /// Fetch more to filter `banned`, avoid "multiple banned cards in one page of 10" showing insufficient cards.
     final int batchSize = (limit * 4).clamp(20, 80);
     const int maxBatches = 24;
 
@@ -47,7 +47,7 @@ class FirestoreIndexRepository {
     DocumentSnapshot<Map<String, dynamic>>? cursor = startAfterDocument;
     DocumentSnapshot<Map<String, dynamic>>? lastConsumed;
     var batchFull = false;
-    /// 本批 Firestore 文档未全部扫完就因 [limit] 停止（例如全库 28 条 < batchSize 40）。
+    /// This batch of Firestore documents was not fully scanned due to [limit] stopping (e.g., 28 < 40 in the entire library).
     var hasUnprocessedDocsInLastBatch = false;
 
     for (var b = 0; b < maxBatches && items.length < limit; b++) {
@@ -91,7 +91,7 @@ class FirestoreIndexRepository {
       }
     }
 
-    /// 满页且（服务器本批仍可能还有后续 **或** 本批内还有未扫描的文档）。
+    /// Full page and (server may still have subsequent batches **or** unprocessed documents in this batch).
     final hasMore =
         items.length == limit && (batchFull || hasUnprocessedDocsInLastBatch);
 
