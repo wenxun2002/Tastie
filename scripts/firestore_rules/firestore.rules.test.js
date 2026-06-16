@@ -8,6 +8,7 @@ const {
 } = require('@firebase/rules-unit-testing');
 const {
   doc,
+  deleteDoc,
   getDoc,
   serverTimestamp,
   setDoc,
@@ -129,7 +130,7 @@ describe('firestore.rules', () => {
   });
 
   it('allows only admins to change user moderation status', async () => {
-    await seedDoc('users/admin', {uid: 'admin', role: 'admin'});
+    await seedDoc('users/admin', {uid: 'admin', role: 'admin', status: 'active'});
     await seedDoc('users/alice', {
       uid: 'alice',
       email: 'alice@example.com',
@@ -150,8 +151,36 @@ describe('firestore.rules', () => {
     }));
   });
 
+  it('rejects banned admin moderation privileges and self-unban', async () => {
+    await seedDoc('users/admin', {
+      uid: 'admin',
+      role: 'admin',
+      status: 'banned',
+    });
+    await seedDoc('users/reviewer', {
+      uid: 'reviewer',
+      role: 'admin',
+      status: 'active',
+    });
+    await seedDoc('users/alice', {
+      uid: 'alice',
+      email: 'alice@example.com',
+      status: 'active',
+    });
+
+    await assertFails(updateDoc(doc(authedDb('admin'), 'users/admin'), {
+      status: 'active',
+    }));
+    await assertFails(updateDoc(doc(authedDb('admin'), 'users/alice'), {
+      status: 'banned',
+    }));
+    await assertSucceeds(updateDoc(doc(authedDb('reviewer'), 'users/admin'), {
+      status: 'active',
+    }));
+  });
+
   it('allows only admins to change recipe moderation status', async () => {
-    await seedDoc('users/admin', {uid: 'admin', role: 'admin'});
+    await seedDoc('users/admin', {uid: 'admin', role: 'admin', status: 'active'});
     await seedDoc('recipes/r1', baseRecipe());
 
     await assertFails(updateDoc(doc(authedDb('alice'), 'recipes/r1'), {
@@ -166,6 +195,7 @@ describe('firestore.rules', () => {
   });
 
   it('prevents recipe owners from reassigning ownership or counters', async () => {
+    await seedDoc('users/alice', {uid: 'alice', status: 'active'});
     await seedDoc('recipes/r1', baseRecipe());
     const recipeRef = doc(authedDb('alice'), 'recipes/r1');
 
@@ -177,6 +207,7 @@ describe('firestore.rules', () => {
   });
 
   it('requires like count changes to be coupled with the like document', async () => {
+    await seedDoc('users/alice', {uid: 'alice', status: 'active'});
     await seedDoc('recipes/r1', baseRecipe());
     const alice = authedDb('alice');
     const recipeRef = doc(alice, 'recipes/r1');
@@ -202,6 +233,7 @@ describe('firestore.rules', () => {
   });
 
   it('requires favorite count changes to be coupled with the collection document', async () => {
+    await seedDoc('users/alice', {uid: 'alice', status: 'active'});
     await seedDoc('recipes/r1', baseRecipe());
     const alice = authedDb('alice');
     const recipeRef = doc(alice, 'recipes/r1');
@@ -224,7 +256,7 @@ describe('firestore.rules', () => {
   });
 
   it('allows only admins to change report status', async () => {
-    await seedDoc('users/admin', {uid: 'admin', role: 'admin'});
+    await seedDoc('users/admin', {uid: 'admin', role: 'admin', status: 'active'});
     await seedDoc('reports/r1', {
       recipeId: 'r1',
       reportedBy: 'alice',
@@ -243,5 +275,40 @@ describe('firestore.rules', () => {
     await assertSucceeds(updateDoc(doc(authedDb('admin'), 'reports/r1'), {
       status: 'pending',
     }));
+  });
+
+  it('rejects banned user writes with an existing auth token', async () => {
+    await seedDoc('users/alice', {uid: 'alice', status: 'banned'});
+    await seedDoc('recipes/r1', baseRecipe());
+    const alice = authedDb('alice');
+
+    await assertFails(updateDoc(doc(alice, 'users/alice'), {
+      displayName: 'Still here',
+    }));
+    await assertFails(updateDoc(doc(alice, 'recipes/r1'), {
+      title: 'Deleted soon',
+    }));
+    await assertFails(deleteDoc(doc(alice, 'recipes/r1')));
+    await assertFails(setDoc(doc(alice, 'reports/report1'), {
+      recipeId: 'r1',
+      reportedBy: 'alice',
+      reason: 'spam',
+      status: 'pending',
+      createdAt: serverTimestamp(),
+    }));
+    await assertFails(setDoc(doc(alice, 'recipe_click_events/e1'), {
+      recipeId: 'r1',
+      userId: 'alice',
+      clickSource: 'search',
+      timestamp: serverTimestamp(),
+    }));
+
+    const likeBatch = writeBatch(alice);
+    likeBatch.set(doc(alice, 'users/alice/likes/r1'), {
+      recipeId: 'r1',
+      createdAt: serverTimestamp(),
+    });
+    likeBatch.update(doc(alice, 'recipes/r1'), {likeCount: 1});
+    await assertFails(likeBatch.commit());
   });
 });
