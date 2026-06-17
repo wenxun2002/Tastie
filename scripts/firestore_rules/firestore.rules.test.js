@@ -188,6 +188,11 @@ describe('firestore.rules', () => {
   });
 
   it('prevents recipe owners from reassigning ownership or counters', async () => {
+    await seedDoc('users/alice', {
+      uid: 'alice',
+      email: 'alice@example.com',
+      status: 'active',
+    });
     await seedDoc('recipes/r1', baseRecipe());
     const recipeRef = doc(authedDb('alice'), 'recipes/r1');
 
@@ -199,6 +204,11 @@ describe('firestore.rules', () => {
   });
 
   it('requires like count changes to be coupled with the like document', async () => {
+    await seedDoc('users/alice', {
+      uid: 'alice',
+      email: 'alice@example.com',
+      status: 'active',
+    });
     await seedDoc('recipes/r1', baseRecipe());
     const alice = authedDb('alice');
     const recipeRef = doc(alice, 'recipes/r1');
@@ -224,6 +234,11 @@ describe('firestore.rules', () => {
   });
 
   it('requires favorite count changes to be coupled with the collection document', async () => {
+    await seedDoc('users/alice', {
+      uid: 'alice',
+      email: 'alice@example.com',
+      status: 'active',
+    });
     await seedDoc('recipes/r1', baseRecipe());
     const alice = authedDb('alice');
     const recipeRef = doc(alice, 'recipes/r1');
