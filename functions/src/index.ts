@@ -65,6 +65,24 @@ type MytDateParts = {
 };
 
 /**
+ * Blocks callable access for accounts marked banned in Firestore.
+ * @param {string} uid Firebase Auth UID from the callable context.
+ */
+async function assertUserNotBanned(uid: string): Promise<void> {
+  const userDoc = await db.collection(USERS_COLLECTION).doc(uid).get();
+  const status = (userDoc.data()?.["status"] ?? "active")
+    .toString()
+    .toLowerCase();
+
+  if (status === "banned") {
+    throw new HttpsError(
+      "permission-denied",
+      "This account is banned.",
+    );
+  }
+}
+
+/**
  * Converts a UTC instant to Malaysia calendar parts (fixed +8h, no DST).
  * @param {Date} utcDate Instant in UTC.
  * @return {MytDateParts} Year/month/day/hour in MYT.
@@ -432,6 +450,8 @@ export const smartGenerate = onCall(
         "You must be signed in to use Smart Generate.",
       );
     }
+
+    await assertUserNotBanned(request.auth.uid);
 
     const apiKey = process.env.GEMINI_API_KEY?.trim() ?? "";
     if (!apiKey) {
