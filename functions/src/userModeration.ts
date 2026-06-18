@@ -108,7 +108,7 @@ async function updateRecipesAuthor(
 }
 
 /**
- * When a user is banned or restored, sync Auth + anonymize/restore recipe authors.
+ * On ban/restore: sync Auth and anonymize or restore recipe authors.
  */
 export const moderateUserOnStatusChange = onDocumentUpdated(
   {
