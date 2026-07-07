@@ -59,9 +59,11 @@ class AuthController extends GetxController {
       _bindProfileListener(user.uid);
       _userRepository.upsertFromAuthUser(user);
     } catch (_) {
-      await _handleBannedAccount(showDialog: false);
+      currentUser.value = user;
+      isSessionLoading.value = false;
+      _bindProfileListener(user.uid);
       Get.snackbar(
-        'Sign-in blocked',
+        'Account status unavailable',
         'Unable to verify account status. Please try again later.',
         snackPosition: SnackPosition.BOTTOM,
       );

@@ -65,6 +65,7 @@ service cloud.firestore {
       function recipeOwnerUpdateAllowed() {
         let affected = request.resource.data.diff(resource.data).affectedKeys();
         return isSignedIn()
+          && isNotBannedUser()
           && resource.data.userId == request.auth.uid
           && affected.hasOnly([
             'author', 'imageUrls', 'title', 'content', 'tags',
@@ -111,6 +112,7 @@ service cloud.firestore {
       function recipeCounterUpdateAllowed() {
         let affected = request.resource.data.diff(resource.data).affectedKeys();
         return isSignedIn()
+          && isNotBannedUser()
           && affected.hasOnly(['likeCount', 'favCount'])
           && (!affected.hasAny(['likeCount']) || likeCountChangeValid())
           && (!affected.hasAny(['favCount']) || favCountChangeValid());
@@ -139,7 +141,9 @@ service cloud.firestore {
         || recipeCounterUpdateAllowed()
         || recipeAdminStatusUpdateAllowed()
         || recipeAdminAuthorUpdateAllowed();
-      allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow delete: if isSignedIn()
+        && isNotBannedUser()
+        && resource.data.userId == request.auth.uid;
     }
 
     // --- User profile + per-user likes / collections ---
@@ -199,6 +203,7 @@ service cloud.firestore {
 
       function engagementDocCreateAllowed(targetRecipeId) {
         return isSignedIn()
+          && isNotBannedUser()
           && request.auth.uid == userId
           && request.resource.data.keys().hasOnly(['recipeId', 'createdAt'])
           && request.resource.data.recipeId == targetRecipeId
@@ -216,6 +221,7 @@ service cloud.firestore {
         allow create: if engagementDocCreateAllowed(recipeId)
           && recipeExistsAndLikeCountChangedBy(recipeId, 1);
         allow delete: if isSignedIn()
+          && isNotBannedUser()
           && request.auth.uid == userId
           && recipeExistsAndLikeCountChangedBy(recipeId, -1);
         allow update: if false;
@@ -226,6 +232,7 @@ service cloud.firestore {
         allow create: if engagementDocCreateAllowed(recipeId)
           && recipeExistsAndFavCountChangedBy(recipeId, 1);
         allow delete: if isSignedIn()
+          && isNotBannedUser()
           && request.auth.uid == userId
           && recipeExistsAndFavCountChangedBy(recipeId, -1);
         allow update: if false;
