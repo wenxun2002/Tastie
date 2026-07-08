@@ -130,6 +130,21 @@ function extractCreatedAt(data: DocumentData): Date | null {
 }
 
 /**
+ * Checks whether a simple scalar Firestore field changed across an update.
+ * @param {DocumentData | undefined} before Fields before the update.
+ * @param {DocumentData | undefined} after Fields after the update.
+ * @param {string} fieldName Field to compare.
+ * @return {boolean} True when the field value changed.
+ */
+function scalarFieldChanged(
+  before: DocumentData | undefined,
+  after: DocumentData | undefined,
+  fieldName: string,
+): boolean {
+  return before?.[fieldName] !== after?.[fieldName];
+}
+
+/**
  * Recomputes dashboard counters and writes `admin_metrics/dashboard_overview`.
  * @return {Promise<void>} Resolves when the metrics doc is updated.
  */
@@ -572,8 +587,14 @@ export const refreshDashboardMetricsOnUserUpdate = onDocumentUpdated(
     ...FIRESTORE_TRIGGER_OPTS,
     document: `${USERS_COLLECTION}/{docId}`,
   },
-  async () => {
-    await recomputeDashboardMetrics();
+  async (event) => {
+    if (scalarFieldChanged(
+      event.data?.before.data(),
+      event.data?.after.data(),
+      "status",
+    )) {
+      await recomputeDashboardMetrics();
+    }
   },
 );
 
@@ -603,7 +624,9 @@ export const refreshDashboardMetricsOnRecipeUpdate = onDocumentUpdated(
     document: `${RECIPES_COLLECTION}/{docId}`,
   },
   async () => {
-    await recomputeDashboardMetrics();
+    // Recipe update fields (likes, clicks, content, author/status) do not affect
+    // dashboard counters; create/delete triggers maintain recipe totals.
+    return;
   },
 );
 
@@ -632,8 +655,14 @@ export const refreshDashboardMetricsOnReportUpdate = onDocumentUpdated(
     ...FIRESTORE_TRIGGER_OPTS,
     document: `${REPORTS_COLLECTION}/{docId}`,
   },
-  async () => {
-    await recomputeDashboardMetrics();
+  async (event) => {
+    if (scalarFieldChanged(
+      event.data?.before.data(),
+      event.data?.after.data(),
+      "status",
+    )) {
+      await recomputeDashboardMetrics();
+    }
   },
 );
 
