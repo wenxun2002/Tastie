@@ -624,8 +624,8 @@ export const refreshDashboardMetricsOnRecipeUpdate = onDocumentUpdated(
     document: `${RECIPES_COLLECTION}/{docId}`,
   },
   async () => {
-    // Recipe update fields (likes, clicks, content, author/status) do not affect
-    // dashboard counters; create/delete triggers maintain recipe totals.
+    // Likes, clicks, content, and moderation updates do not affect dashboard
+    // counters; create/delete triggers maintain recipe totals.
     return;
   },
 );
