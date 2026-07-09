@@ -234,8 +234,31 @@ service cloud.firestore {
 
     // --- Reports (mobile creates; admin resolves via status only) ---
     match /reports/{reportId} {
+      function reportCreateAllowed() {
+        let d = request.resource.data;
+        return isSignedIn()
+          && d.keys().hasOnly([
+            'recipeId', 'recipeTitle', 'authorUsername', 'reportedBy',
+            'reason', 'description', 'status', 'timestamp'
+          ])
+          && d.keys().hasAll([
+            'recipeId', 'recipeTitle', 'authorUsername', 'reportedBy',
+            'reason', 'description', 'status'
+          ])
+          && d.recipeId is string
+          && d.recipeId.size() > 0
+          && d.recipeTitle is string
+          && d.authorUsername is string
+          && d.reportedBy == request.auth.uid
+          && d.reason is string
+          && d.reason.size() > 0
+          && d.description is string
+          && d.status == 'pending'
+          && (!d.keys().hasAny(['timestamp']) || d.timestamp is timestamp);
+      }
+
       allow read: if isAdmin();
-      allow create: if isSignedIn();
+      allow create: if reportCreateAllowed();
       allow update: if isAdmin()
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
         && request.resource.data.status in ['pending', 'solved'];
