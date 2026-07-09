@@ -244,4 +244,53 @@ describe('firestore.rules', () => {
       status: 'pending',
     }));
   });
+
+  it('requires report creates to be pending and attributed to the caller', async () => {
+    const alice = authedDb('alice');
+
+    await assertSucceeds(setDoc(doc(alice, 'reports/valid'), {
+      recipeId: 'r1',
+      recipeTitle: 'Soup',
+      authorUsername: 'Alice',
+      reportedBy: 'alice',
+      reason: 'Spam',
+      description: '',
+      status: 'pending',
+      timestamp: serverTimestamp(),
+    }));
+
+    await assertFails(setDoc(doc(alice, 'reports/pre-solved'), {
+      recipeId: 'r1',
+      recipeTitle: 'Soup',
+      authorUsername: 'Alice',
+      reportedBy: 'alice',
+      reason: 'Spam',
+      description: '',
+      status: 'solved',
+      timestamp: serverTimestamp(),
+    }));
+
+    await assertFails(setDoc(doc(alice, 'reports/spoofed-reporter'), {
+      recipeId: 'r1',
+      recipeTitle: 'Soup',
+      authorUsername: 'Alice',
+      reportedBy: 'bob',
+      reason: 'Spam',
+      description: '',
+      status: 'pending',
+      timestamp: serverTimestamp(),
+    }));
+
+    await assertFails(setDoc(doc(alice, 'reports/extra-fields'), {
+      recipeId: 'r1',
+      recipeTitle: 'Soup',
+      authorUsername: 'Alice',
+      reportedBy: 'alice',
+      reason: 'Spam',
+      description: '',
+      status: 'pending',
+      escalated: true,
+      timestamp: serverTimestamp(),
+    }));
+  });
 });
