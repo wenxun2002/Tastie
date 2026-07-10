@@ -22,6 +22,13 @@ service cloud.firestore {
           || get(signedInUserPath()).data.status != 'banned');
     }
 
+    function signedInUserIsNotBanned() {
+      return isSignedIn()
+        && (!exists(signedInUserPath())
+          || !get(signedInUserPath()).data.keys().hasAny(['status'])
+          || get(signedInUserPath()).data.status != 'banned');
+    }
+
     // --- Recipes (feed + engagement counters on same doc) ---
     match /recipes/{recipeId} {
       function recipePath() {
@@ -65,6 +72,7 @@ service cloud.firestore {
       function recipeOwnerUpdateAllowed() {
         let affected = request.resource.data.diff(resource.data).affectedKeys();
         return isSignedIn()
+          && signedInUserIsNotBanned()
           && resource.data.userId == request.auth.uid
           && affected.hasOnly([
             'author', 'imageUrls', 'title', 'content', 'tags',
@@ -139,7 +147,8 @@ service cloud.firestore {
         || recipeCounterUpdateAllowed()
         || recipeAdminStatusUpdateAllowed()
         || recipeAdminAuthorUpdateAllowed();
-      allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow delete: if signedInUserIsNotBanned()
+        && resource.data.userId == request.auth.uid;
     }
 
     // --- User profile + per-user likes / collections ---
