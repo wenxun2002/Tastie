@@ -8,6 +8,7 @@ const {
 } = require('@firebase/rules-unit-testing');
 const {
   doc,
+  deleteDoc,
   getDoc,
   serverTimestamp,
   setDoc,
@@ -150,6 +151,31 @@ describe('firestore.rules', () => {
     }));
   });
 
+  it('does not grant admin privileges to banned admins', async () => {
+    await seedDoc('users/admin', {
+      uid: 'admin',
+      role: 'admin',
+      status: 'banned',
+    });
+    await seedDoc('users/alice', {
+      uid: 'alice',
+      email: 'alice@example.com',
+      status: 'active',
+    });
+    await seedDoc('recipes/r1', baseRecipe());
+
+    await assertFails(getDoc(doc(authedDb('admin'), 'users/alice')));
+    await assertFails(updateDoc(doc(authedDb('admin'), 'users/alice'), {
+      status: 'banned',
+    }));
+    await assertFails(updateDoc(doc(authedDb('admin'), 'recipes/r1'), {
+      status: 'banned',
+    }));
+    await assertFails(setDoc(doc(authedDb('admin'), 'Search_ingredient/i1'), {
+      name: 'secret ingredient',
+    }));
+  });
+
   it('allows only admins to change recipe moderation status', async () => {
     await seedDoc('users/admin', {uid: 'admin', role: 'admin'});
     await seedDoc('recipes/r1', baseRecipe());
@@ -166,6 +192,7 @@ describe('firestore.rules', () => {
   });
 
   it('prevents recipe owners from reassigning ownership or counters', async () => {
+    await seedDoc('users/alice', {uid: 'alice', status: 'active'});
     await seedDoc('recipes/r1', baseRecipe());
     const recipeRef = doc(authedDb('alice'), 'recipes/r1');
 
@@ -177,6 +204,7 @@ describe('firestore.rules', () => {
   });
 
   it('requires like count changes to be coupled with the like document', async () => {
+    await seedDoc('users/alice', {uid: 'alice', status: 'active'});
     await seedDoc('recipes/r1', baseRecipe());
     const alice = authedDb('alice');
     const recipeRef = doc(alice, 'recipes/r1');
@@ -202,6 +230,7 @@ describe('firestore.rules', () => {
   });
 
   it('requires favorite count changes to be coupled with the collection document', async () => {
+    await seedDoc('users/alice', {uid: 'alice', status: 'active'});
     await seedDoc('recipes/r1', baseRecipe());
     const alice = authedDb('alice');
     const recipeRef = doc(alice, 'recipes/r1');
@@ -221,6 +250,53 @@ describe('firestore.rules', () => {
     unfavoriteBatch.delete(collectionRef);
     unfavoriteBatch.update(recipeRef, {favCount: 0});
     await assertSucceeds(unfavoriteBatch.commit());
+  });
+
+  it('blocks banned users from signed-in write paths', async () => {
+    await seedDoc('users/alice', {uid: 'alice', status: 'banned'});
+    await seedDoc('users/bob', {uid: 'bob', status: 'active'});
+    await seedDoc('recipes/alice-recipe', baseRecipe());
+    await seedDoc('recipes/bob-recipe', baseRecipe({
+      userId: 'bob',
+      authorUid: 'bob',
+      author: {nickname: 'Bob', avatar: ''},
+    }));
+
+    const alice = authedDb('alice');
+
+    await assertFails(updateDoc(doc(alice, 'users/alice'), {
+      displayName: 'Evasive name',
+    }));
+    await assertFails(updateDoc(doc(alice, 'recipes/alice-recipe'), {
+      title: 'Edited after ban',
+    }));
+    await assertFails(deleteDoc(doc(alice, 'recipes/alice-recipe')));
+
+    const likeBatch = writeBatch(alice);
+    likeBatch.set(doc(alice, 'users/alice/likes/bob-recipe'), {
+      recipeId: 'bob-recipe',
+      createdAt: serverTimestamp(),
+    });
+    likeBatch.update(doc(alice, 'recipes/bob-recipe'), {likeCount: 1});
+    await assertFails(likeBatch.commit());
+
+    await assertFails(setDoc(doc(alice, 'reports/r1'), {
+      recipeId: 'bob-recipe',
+      recipeTitle: 'Soup',
+      authorUsername: 'Bob',
+      reportedBy: 'alice',
+      reason: 'Spam',
+      description: 'Still trying after ban',
+      status: 'pending',
+      timestamp: serverTimestamp(),
+    }));
+
+    await assertFails(setDoc(doc(alice, 'recipe_click_events/e1'), {
+      recipeId: 'bob-recipe',
+      userId: 'alice',
+      clickSource: 'normal_browse',
+      timestamp: serverTimestamp(),
+    }));
   });
 
   it('allows only admins to change report status', async () => {
