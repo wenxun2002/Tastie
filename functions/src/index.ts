@@ -65,6 +65,25 @@ type MytDateParts = {
 };
 
 /**
+ * Blocks callable access for users explicitly marked banned in Firestore.
+ * Missing profile docs are allowed so first-run auth/profile creation keeps
+ * working; Firestore rules remain authoritative for data writes.
+ * @param {string} uid Authenticated Firebase Auth UID.
+ * @param {string} feature Feature name for logs/errors.
+ */
+async function assertUserNotBanned(uid: string, feature: string): Promise<void> {
+  const userSnap = await db.collection(USERS_COLLECTION).doc(uid).get();
+  const status = String(userSnap.data()?.["status"] ?? "active").toLowerCase();
+  if (status === "banned") {
+    logger.warn(`${feature}: banned user blocked`, {uid});
+    throw new HttpsError(
+      "permission-denied",
+      "Your account is not allowed to use this feature.",
+    );
+  }
+}
+
+/**
  * Converts a UTC instant to Malaysia calendar parts (fixed +8h, no DST).
  * @param {Date} utcDate Instant in UTC.
  * @return {MytDateParts} Year/month/day/hour in MYT.
@@ -432,6 +451,7 @@ export const smartGenerate = onCall(
         "You must be signed in to use Smart Generate.",
       );
     }
+    await assertUserNotBanned(request.auth.uid, "smartGenerate");
 
     const apiKey = process.env.GEMINI_API_KEY?.trim() ?? "";
     if (!apiKey) {
@@ -602,7 +622,17 @@ export const refreshDashboardMetricsOnRecipeUpdate = onDocumentUpdated(
     ...FIRESTORE_TRIGGER_OPTS,
     document: `${RECIPES_COLLECTION}/{docId}`,
   },
-  async () => {
+  async (event) => {
+    const beforeCreatedAt = event.data?.before.get("createdAt");
+    const afterCreatedAt = event.data?.after.get("createdAt");
+    const createdAtChanged =
+      beforeCreatedAt instanceof Timestamp &&
+      afterCreatedAt instanceof Timestamp ?
+        !beforeCreatedAt.isEqual(afterCreatedAt) :
+        beforeCreatedAt !== afterCreatedAt;
+    if (!createdAtChanged) {
+      return;
+    }
     await recomputeDashboardMetrics();
   },
 );
@@ -669,43 +699,48 @@ export const aggregateRecipeClickMetricsOnEventCreate = onDocumentCreated(
     }
 
     const recipeRef = db.collection(RECIPES_COLLECTION).doc(recipeId);
-    const recipeSnap = await recipeRef.get();
-    if (!recipeSnap.exists) {
-      logger.warn("recipe_click_events: recipe not found", {recipeId});
-      return;
-    }
-
-    const recipeData = recipeSnap.data() ?? {};
-    const cm = recipeData["click_metrics"];
-    const needsSeed =
-      cm === undefined || cm === null || typeof cm !== "object";
-
-    if (needsSeed) {
-      const rawLegacy = recipeData["clicked"];
-      let legacyClicked = 0;
-      if (typeof rawLegacy === "number") {
-        legacyClicked = rawLegacy;
-      } else if (typeof rawLegacy === "string") {
-        legacyClicked = Number.parseInt(rawLegacy, 10) || 0;
+    await db.runTransaction(async (transaction) => {
+      const recipeSnap = await transaction.get(recipeRef);
+      if (!recipeSnap.exists) {
+        logger.warn("recipe_click_events: recipe not found", {recipeId});
+        return;
       }
 
-      await recipeRef.set(
-        {
-          click_metrics: {
-            weather_promoted: 0,
-            weather_notpromoted: 0,
-            normal_browse: 0,
-            search: 0,
-            total: legacyClicked,
-          },
-        },
-        {merge: true},
-      );
-    }
+      const recipeData = recipeSnap.data() ?? {};
+      const cm = recipeData["click_metrics"];
+      const needsSeed =
+        cm === undefined || cm === null || typeof cm !== "object";
 
-    await recipeRef.update({
-      [`click_metrics.${clickSource}`]: FieldValue.increment(1),
-      "click_metrics.total": FieldValue.increment(1),
+      if (needsSeed) {
+        const rawLegacy = recipeData["clicked"];
+        let legacyClicked = 0;
+        if (typeof rawLegacy === "number") {
+          legacyClicked = rawLegacy;
+        } else if (typeof rawLegacy === "string") {
+          legacyClicked = Number.parseInt(rawLegacy, 10) || 0;
+        }
+
+        transaction.set(
+          recipeRef,
+          {
+            click_metrics: {
+              weather_promoted: clickSource === "weather_promoted" ? 1 : 0,
+              weather_notpromoted:
+                clickSource === "weather_notpromoted" ? 1 : 0,
+              normal_browse: clickSource === "normal_browse" ? 1 : 0,
+              search: clickSource === "search" ? 1 : 0,
+              total: legacyClicked + 1,
+            },
+          },
+          {merge: true},
+        );
+        return;
+      }
+
+      transaction.update(recipeRef, {
+        [`click_metrics.${clickSource}`]: FieldValue.increment(1),
+        "click_metrics.total": FieldValue.increment(1),
+      });
     });
   },
 );
