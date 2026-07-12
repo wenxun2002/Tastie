@@ -8,6 +8,7 @@ const {
 } = require('@firebase/rules-unit-testing');
 const {
   doc,
+  deleteDoc,
   getDoc,
   serverTimestamp,
   setDoc,
@@ -166,6 +167,7 @@ describe('firestore.rules', () => {
   });
 
   it('prevents recipe owners from reassigning ownership or counters', async () => {
+    await seedDoc('users/alice', {uid: 'alice', status: 'active'});
     await seedDoc('recipes/r1', baseRecipe());
     const recipeRef = doc(authedDb('alice'), 'recipes/r1');
 
@@ -177,6 +179,7 @@ describe('firestore.rules', () => {
   });
 
   it('requires like count changes to be coupled with the like document', async () => {
+    await seedDoc('users/alice', {uid: 'alice', status: 'active'});
     await seedDoc('recipes/r1', baseRecipe());
     const alice = authedDb('alice');
     const recipeRef = doc(alice, 'recipes/r1');
@@ -202,6 +205,7 @@ describe('firestore.rules', () => {
   });
 
   it('requires favorite count changes to be coupled with the collection document', async () => {
+    await seedDoc('users/alice', {uid: 'alice', status: 'active'});
     await seedDoc('recipes/r1', baseRecipe());
     const alice = authedDb('alice');
     const recipeRef = doc(alice, 'recipes/r1');
@@ -221,6 +225,95 @@ describe('firestore.rules', () => {
     unfavoriteBatch.delete(collectionRef);
     unfavoriteBatch.update(recipeRef, {favCount: 0});
     await assertSucceeds(unfavoriteBatch.commit());
+  });
+
+  it('blocks banned users from mutating recipes or engagement', async () => {
+    await seedDoc('users/alice', {uid: 'alice', status: 'banned'});
+    await seedDoc('recipes/r1', baseRecipe({likeCount: 1, favCount: 1}));
+    await seedDoc('users/alice/likes/r1', {
+      recipeId: 'r1',
+      createdAt: new Date('2026-01-02T00:00:00Z'),
+    });
+    await seedDoc('users/alice/collections/r1', {
+      recipeId: 'r1',
+      createdAt: new Date('2026-01-02T00:00:00Z'),
+    });
+
+    const alice = authedDb('alice');
+    await assertFails(setDoc(doc(alice, 'recipes/r2'), baseRecipe({
+      title: 'Blocked create',
+    })));
+    await assertFails(updateDoc(doc(alice, 'recipes/r1'), {
+      title: 'Blocked edit',
+    }));
+    await assertFails(deleteDoc(doc(alice, 'recipes/r1')));
+    await assertFails(updateDoc(doc(alice, 'users/alice'), {
+      displayName: 'Still banned',
+    }));
+
+    const likeBatch = writeBatch(alice);
+    likeBatch.delete(doc(alice, 'users/alice/likes/r1'));
+    likeBatch.update(doc(alice, 'recipes/r1'), {likeCount: 0});
+    await assertFails(likeBatch.commit());
+
+    const favoriteBatch = writeBatch(alice);
+    favoriteBatch.delete(doc(alice, 'users/alice/collections/r1'));
+    favoriteBatch.update(doc(alice, 'recipes/r1'), {favCount: 0});
+    await assertFails(favoriteBatch.commit());
+
+    await assertFails(setDoc(doc(alice, 'recipe_click_events/e1'), {
+      recipeId: 'r1',
+      userId: 'alice',
+      clickSource: 'normal_browse',
+      timestamp: serverTimestamp(),
+    }));
+  });
+
+  it('allows only active users to create pending self-authored reports', async () => {
+    await seedDoc('users/alice', {uid: 'alice', status: 'active'});
+    await seedDoc('users/banned', {uid: 'banned', status: 'banned'});
+
+    await assertSucceeds(setDoc(doc(authedDb('alice'), 'reports/r1'), {
+      recipeId: 'recipe-1',
+      recipeTitle: 'Soup',
+      authorUsername: 'Chef',
+      reportedBy: 'alice',
+      reason: 'spam',
+      description: 'Looks suspicious',
+      status: 'pending',
+      timestamp: serverTimestamp(),
+    }));
+
+    await assertFails(setDoc(doc(authedDb('alice'), 'reports/r2'), {
+      recipeId: 'recipe-1',
+      recipeTitle: 'Soup',
+      authorUsername: 'Chef',
+      reportedBy: 'bob',
+      reason: 'spam',
+      description: 'Looks suspicious',
+      status: 'pending',
+      timestamp: serverTimestamp(),
+    }));
+    await assertFails(setDoc(doc(authedDb('alice'), 'reports/r3'), {
+      recipeId: 'recipe-1',
+      recipeTitle: 'Soup',
+      authorUsername: 'Chef',
+      reportedBy: 'alice',
+      reason: 'spam',
+      description: 'Looks suspicious',
+      status: 'solved',
+      timestamp: serverTimestamp(),
+    }));
+    await assertFails(setDoc(doc(authedDb('banned'), 'reports/r4'), {
+      recipeId: 'recipe-1',
+      recipeTitle: 'Soup',
+      authorUsername: 'Chef',
+      reportedBy: 'banned',
+      reason: 'spam',
+      description: 'Looks suspicious',
+      status: 'pending',
+      timestamp: serverTimestamp(),
+    }));
   });
 
   it('allows only admins to change report status', async () => {

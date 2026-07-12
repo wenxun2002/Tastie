@@ -40,6 +40,26 @@ const CATEGORY_KEYS: WeatherCategoryKey[] = [
   "neutral",
 ];
 
+const USERS_COLLECTION = "users";
+
+/**
+ * Blocks callable weather lookups for accounts explicitly marked banned.
+ * @param {string} uid Authenticated Firebase Auth UID.
+ */
+async function assertUserNotBanned(uid: string): Promise<void> {
+  const userSnap = await admin.firestore().collection(USERS_COLLECTION)
+    .doc(uid)
+    .get();
+  const status = String(userSnap.data()?.["status"] ?? "active").toLowerCase();
+  if (status === "banned") {
+    logger.warn("getWeatherContext: banned user blocked", {uid});
+    throw new HttpsError(
+      "permission-denied",
+      "Your account is not allowed to use weather context.",
+    );
+  }
+}
+
 const DEFAULT_TAG_POLICY: Record<WeatherCategoryKey, TagBuckets> = {
   hotHumid: {
     promoted: ["Cooling", "Hydrating", "Light"],
@@ -595,6 +615,14 @@ export const getWeatherContext = onCall(
     cors: true,
   },
   async (request) => {
+    if (!request.auth?.uid) {
+      throw new HttpsError(
+        "unauthenticated",
+        "You must be signed in to use weather context.",
+      );
+    }
+    await assertUserNotBanned(request.auth.uid);
+
     const apiKey = process.env.OPENWEATHER_API_KEY?.trim() ?? "";
     if (!apiKey) {
       logger.error("OPENWEATHER_API_KEY is not set");

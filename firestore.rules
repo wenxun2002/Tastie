@@ -12,6 +12,7 @@ service cloud.firestore {
     function isAdmin() {
       return isSignedIn()
         && exists(signedInUserPath())
+        && isNotBannedUser()
         && get(signedInUserPath()).data.role == 'admin';
     }
 
@@ -65,6 +66,7 @@ service cloud.firestore {
       function recipeOwnerUpdateAllowed() {
         let affected = request.resource.data.diff(resource.data).affectedKeys();
         return isSignedIn()
+          && isNotBannedUser()
           && resource.data.userId == request.auth.uid
           && affected.hasOnly([
             'author', 'imageUrls', 'title', 'content', 'tags',
@@ -111,6 +113,7 @@ service cloud.firestore {
       function recipeCounterUpdateAllowed() {
         let affected = request.resource.data.diff(resource.data).affectedKeys();
         return isSignedIn()
+          && isNotBannedUser()
           && affected.hasOnly(['likeCount', 'favCount'])
           && (!affected.hasAny(['likeCount']) || likeCountChangeValid())
           && (!affected.hasAny(['favCount']) || favCountChangeValid());
@@ -139,7 +142,9 @@ service cloud.firestore {
         || recipeCounterUpdateAllowed()
         || recipeAdminStatusUpdateAllowed()
         || recipeAdminAuthorUpdateAllowed();
-      allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow delete: if isSignedIn()
+        && isNotBannedUser()
+        && resource.data.userId == request.auth.uid;
     }
 
     // --- User profile + per-user likes / collections ---
@@ -158,6 +163,7 @@ service cloud.firestore {
       function userProfileUpdateAllowed() {
         let affected = request.resource.data.diff(resource.data).affectedKeys();
         return isSignedIn()
+          && isNotBannedUser()
           && request.auth.uid == userId
           && affected.hasOnly([
             'uid', 'email', 'displayName', 'photoURL',
@@ -199,6 +205,7 @@ service cloud.firestore {
 
       function engagementDocCreateAllowed(targetRecipeId) {
         return isSignedIn()
+          && isNotBannedUser()
           && request.auth.uid == userId
           && request.resource.data.keys().hasOnly(['recipeId', 'createdAt'])
           && request.resource.data.recipeId == targetRecipeId
@@ -216,6 +223,7 @@ service cloud.firestore {
         allow create: if engagementDocCreateAllowed(recipeId)
           && recipeExistsAndLikeCountChangedBy(recipeId, 1);
         allow delete: if isSignedIn()
+          && isNotBannedUser()
           && request.auth.uid == userId
           && recipeExistsAndLikeCountChangedBy(recipeId, -1);
         allow update: if false;
@@ -226,6 +234,7 @@ service cloud.firestore {
         allow create: if engagementDocCreateAllowed(recipeId)
           && recipeExistsAndFavCountChangedBy(recipeId, 1);
         allow delete: if isSignedIn()
+          && isNotBannedUser()
           && request.auth.uid == userId
           && recipeExistsAndFavCountChangedBy(recipeId, -1);
         allow update: if false;
@@ -234,8 +243,26 @@ service cloud.firestore {
 
     // --- Reports (mobile creates; admin resolves via status only) ---
     match /reports/{reportId} {
+      function reportCreateAllowed() {
+        let d = request.resource.data;
+        return isSignedIn()
+          && isNotBannedUser()
+          && d.keys().hasOnly([
+            'recipeId', 'recipeTitle', 'authorUsername',
+            'reportedBy', 'reason', 'description', 'status', 'timestamp'
+          ])
+          && d.recipeId is string
+          && d.recipeTitle is string
+          && d.authorUsername is string
+          && d.reportedBy == request.auth.uid
+          && d.reason is string
+          && d.description is string
+          && d.status == 'pending'
+          && (!d.keys().hasAny(['timestamp']) || d.timestamp is timestamp);
+      }
+
       allow read: if isAdmin();
-      allow create: if isSignedIn();
+      allow create: if reportCreateAllowed();
       allow update: if isAdmin()
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
         && request.resource.data.status in ['pending', 'solved'];
@@ -288,6 +315,7 @@ service cloud.firestore {
 
     match /recipe_click_events/{eventId} {
       allow create: if isSignedIn()
+        && isNotBannedUser()
         && request.resource.data.userId == request.auth.uid
         && request.resource.data.recipeId is string
         && request.resource.data.clickSource is string
