@@ -71,7 +71,10 @@ type MytDateParts = {
  * @param {string} uid Authenticated Firebase Auth UID.
  * @param {string} feature Feature name for logs/errors.
  */
-async function assertUserNotBanned(uid: string, feature: string): Promise<void> {
+async function assertUserNotBanned(
+  uid: string,
+  feature: string,
+): Promise<void> {
   const userSnap = await db.collection(USERS_COLLECTION).doc(uid).get();
   const status = String(userSnap.data()?.["status"] ?? "active").toLowerCase();
   if (status === "banned") {
