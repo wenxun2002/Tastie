@@ -10,6 +10,10 @@ const FIRESTORE_TRIGGER_OPTS = {region: "asia-southeast1"};
 const BANNED_AUTHOR_NICKNAME = "Banned User";
 const BATCH_LIMIT = 500;
 
+/**
+ * Resolves the Firestore client lazily after Firebase Admin initialization.
+ * @return {FirebaseFirestore.Firestore} Firestore client.
+ */
 function firestore() {
   return getFirestore();
 }
