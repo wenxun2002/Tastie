@@ -4,13 +4,15 @@ import {getFirestore} from "firebase-admin/firestore";
 import {onDocumentUpdated} from "firebase-functions/v2/firestore";
 import * as logger from "firebase-functions/logger";
 
-const db = getFirestore();
-
 const USERS_COLLECTION = "users";
 const RECIPES_COLLECTION = "recipes";
 const FIRESTORE_TRIGGER_OPTS = {region: "asia-southeast1"};
 const BANNED_AUTHOR_NICKNAME = "Banned User";
 const BATCH_LIMIT = 500;
+
+function firestore() {
+  return getFirestore();
+}
 
 /**
  * Reads a user's moderation status (`active` / `banned`).
@@ -70,6 +72,7 @@ async function updateRecipesAuthor(
   nickname: string,
   avatar: string,
 ): Promise<number> {
+  const db = firestore();
   const snap = await db
     .collection(RECIPES_COLLECTION)
     .where("userId", "==", uid)
