@@ -7,6 +7,7 @@ const {
   initializeTestEnvironment,
 } = require('@firebase/rules-unit-testing');
 const {
+  deleteDoc,
   doc,
   getDoc,
   serverTimestamp,
@@ -166,6 +167,7 @@ describe('firestore.rules', () => {
   });
 
   it('prevents recipe owners from reassigning ownership or counters', async () => {
+    await seedDoc('users/alice', {uid: 'alice', status: 'active'});
     await seedDoc('recipes/r1', baseRecipe());
     const recipeRef = doc(authedDb('alice'), 'recipes/r1');
 
@@ -177,6 +179,7 @@ describe('firestore.rules', () => {
   });
 
   it('requires like count changes to be coupled with the like document', async () => {
+    await seedDoc('users/alice', {uid: 'alice', status: 'active'});
     await seedDoc('recipes/r1', baseRecipe());
     const alice = authedDb('alice');
     const recipeRef = doc(alice, 'recipes/r1');
@@ -202,6 +205,7 @@ describe('firestore.rules', () => {
   });
 
   it('requires favorite count changes to be coupled with the collection document', async () => {
+    await seedDoc('users/alice', {uid: 'alice', status: 'active'});
     await seedDoc('recipes/r1', baseRecipe());
     const alice = authedDb('alice');
     const recipeRef = doc(alice, 'recipes/r1');
@@ -221,6 +225,53 @@ describe('firestore.rules', () => {
     unfavoriteBatch.delete(collectionRef);
     unfavoriteBatch.update(recipeRef, {favCount: 0});
     await assertSucceeds(unfavoriteBatch.commit());
+  });
+
+  it('blocks banned users from authenticated write paths', async () => {
+    await seedDoc('users/alice', {
+      uid: 'alice',
+      email: 'alice@example.com',
+      status: 'banned',
+    });
+    await seedDoc('users/admin', {
+      uid: 'admin',
+      role: 'admin',
+      status: 'banned',
+    });
+    await seedDoc('users/bob', {uid: 'bob', status: 'active'});
+    await seedDoc('recipes/r1', baseRecipe());
+
+    const alice = authedDb('alice');
+    const recipeRef = doc(alice, 'recipes/r1');
+    const likeRef = doc(alice, 'users/alice/likes/r1');
+
+    await assertFails(updateDoc(recipeRef, {title: 'Ban bypass'}));
+    await assertFails(deleteDoc(recipeRef));
+    await assertFails(updateDoc(doc(alice, 'users/alice'), {
+      displayName: 'Still active',
+    }));
+
+    const likeBatch = writeBatch(alice);
+    likeBatch.set(likeRef, {
+      recipeId: 'r1',
+      createdAt: serverTimestamp(),
+    });
+    likeBatch.update(recipeRef, {likeCount: 1});
+    await assertFails(likeBatch.commit());
+
+    await assertFails(setDoc(doc(alice, 'reports/banned-report'), {
+      recipeId: 'r1',
+      reportedBy: 'alice',
+      status: 'pending',
+    }));
+    await assertFails(setDoc(doc(alice, 'recipe_click_events/banned-click'), {
+      recipeId: 'r1',
+      userId: 'alice',
+      clickSource: 'search',
+    }));
+    await assertFails(updateDoc(doc(authedDb('admin'), 'users/bob'), {
+      status: 'banned',
+    }));
   });
 
   it('allows only admins to change report status', async () => {
