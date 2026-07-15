@@ -433,6 +433,20 @@ export const smartGenerate = onCall(
       );
     }
 
+    const userSnapshot = await db
+      .collection(USERS_COLLECTION)
+      .doc(request.auth.uid)
+      .get();
+    const userStatus = (
+      userSnapshot.data()?.["status"] ?? "active"
+    ).toString().toLowerCase();
+    if (userStatus === "banned") {
+      throw new HttpsError(
+        "permission-denied",
+        "This account is not allowed to use Smart Generate.",
+      );
+    }
+
     const apiKey = process.env.GEMINI_API_KEY?.trim() ?? "";
     if (!apiKey) {
       logger.error("GEMINI_API_KEY is not set (functions/.env or deploy env)");
