@@ -179,6 +179,7 @@ describe('firestore.rules', () => {
     await assertFails(updateDoc(recipeRef, {authorUid: 'bob'}));
     await assertFails(updateDoc(recipeRef, {likeCount: 999}));
     await assertFails(updateDoc(recipeRef, {clicked: 999}));
+    await assertSucceeds(deleteDoc(recipeRef));
   });
 
   it('requires like count changes to be coupled with the like document', async () => {
