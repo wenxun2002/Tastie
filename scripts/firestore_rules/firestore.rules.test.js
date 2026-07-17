@@ -295,6 +295,18 @@ describe('firestore.rules', () => {
     await assertFails(likeBatch.commit());
   });
 
+  it('fails closed for non-canonical user moderation statuses', async () => {
+    await seedDoc('users/alice', {
+      uid: 'alice',
+      status: 'Banned',
+    });
+    await seedDoc('recipes/r1', baseRecipe());
+
+    await assertFails(updateDoc(doc(authedDb('alice'), 'recipes/r1'), {
+      title: 'Changed with malformed status',
+    }));
+  });
+
   it('removes admin privileges as soon as the admin is banned', async () => {
     await seedDoc('users/admin', {
       uid: 'admin',
