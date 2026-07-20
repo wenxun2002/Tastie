@@ -325,6 +325,9 @@ describe('firestore.rules', () => {
     });
 
     const bannedAdmin = authedDb('admin');
+    await assertFails(updateDoc(doc(bannedAdmin, 'users/admin'), {
+      status: 'active',
+    }));
     await assertFails(updateDoc(doc(bannedAdmin, 'users/alice'), {
       status: 'banned',
     }));
