@@ -437,10 +437,11 @@ export const smartGenerate = onCall(
       .collection(USERS_COLLECTION)
       .doc(request.auth.uid)
       .get();
-    const userStatus = String(
-      userSnapshot.data()?.["status"] ?? "active",
-    ).toLowerCase();
-    if (!userSnapshot.exists || userStatus === "banned") {
+    const userStatus = userSnapshot.data()?.["status"];
+    if (
+      !userSnapshot.exists ||
+      (userStatus !== undefined && userStatus !== "active")
+    ) {
       throw new HttpsError(
         "permission-denied",
         "This account cannot use Smart Generate.",
