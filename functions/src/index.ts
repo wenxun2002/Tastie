@@ -669,43 +669,52 @@ export const aggregateRecipeClickMetricsOnEventCreate = onDocumentCreated(
     }
 
     const recipeRef = db.collection(RECIPES_COLLECTION).doc(recipeId);
-    const recipeSnap = await recipeRef.get();
-    if (!recipeSnap.exists) {
-      logger.warn("recipe_click_events: recipe not found", {recipeId});
-      return;
-    }
 
-    const recipeData = recipeSnap.data() ?? {};
-    const cm = recipeData["click_metrics"];
-    const needsSeed =
-      cm === undefined || cm === null || typeof cm !== "object";
-
-    if (needsSeed) {
-      const rawLegacy = recipeData["clicked"];
-      let legacyClicked = 0;
-      if (typeof rawLegacy === "number") {
-        legacyClicked = rawLegacy;
-      } else if (typeof rawLegacy === "string") {
-        legacyClicked = Number.parseInt(rawLegacy, 10) || 0;
+    // Seed + increment must be atomic. A non-transactional seed `set` replaces
+    // the whole `click_metrics` map and can clobber concurrent increments on
+    // legacy recipes that still only have `clicked`.
+    await db.runTransaction(async (transaction) => {
+      const recipeSnap = await transaction.get(recipeRef);
+      if (!recipeSnap.exists) {
+        logger.warn("recipe_click_events: recipe not found", {recipeId});
+        return;
       }
 
-      await recipeRef.set(
-        {
-          click_metrics: {
-            weather_promoted: 0,
-            weather_notpromoted: 0,
-            normal_browse: 0,
-            search: 0,
-            total: legacyClicked,
-          },
-        },
-        {merge: true},
-      );
-    }
+      const recipeData = recipeSnap.data() ?? {};
+      const cm = recipeData["click_metrics"];
+      const needsSeed =
+        cm === undefined || cm === null || typeof cm !== "object";
 
-    await recipeRef.update({
-      [`click_metrics.${clickSource}`]: FieldValue.increment(1),
-      "click_metrics.total": FieldValue.increment(1),
+      if (needsSeed) {
+        const rawLegacy = recipeData["clicked"];
+        let legacyClicked = 0;
+        if (typeof rawLegacy === "number") {
+          legacyClicked = rawLegacy;
+        } else if (typeof rawLegacy === "string") {
+          legacyClicked = Number.parseInt(rawLegacy, 10) || 0;
+        }
+
+        transaction.set(
+          recipeRef,
+          {
+            click_metrics: {
+              weather_promoted: clickSource === "weather_promoted" ? 1 : 0,
+              weather_notpromoted:
+                clickSource === "weather_notpromoted" ? 1 : 0,
+              normal_browse: clickSource === "normal_browse" ? 1 : 0,
+              search: clickSource === "search" ? 1 : 0,
+              total: legacyClicked + 1,
+            },
+          },
+          {merge: true},
+        );
+        return;
+      }
+
+      transaction.update(recipeRef, {
+        [`click_metrics.${clickSource}`]: FieldValue.increment(1),
+        "click_metrics.total": FieldValue.increment(1),
+      });
     });
   },
 );
