@@ -34,18 +34,31 @@ class CardData {
   }
 
   factory CardData.fromJson(Map<String, dynamic> json) {
+    int asInt(dynamic value) {
+      if (value is num) return value.toInt();
+      if (value is String) return int.tryParse(value.trim()) ?? 0;
+      return 0;
+    }
+
+    String asString(dynamic value) => value is String ? value : value?.toString() ?? '';
+
+    final tagsRaw = json['tags'];
+    final tags = tagsRaw is List
+        ? tagsRaw.map((e) => e.toString()).toList(growable: false)
+        : const <String>[];
+
     return CardData(
-      id: json['id'] as String,
-      uid: json['uid'] as String,
-      cover: json['cover'] as String,
-      title: json['title'] as String,
-      content: json['content'] as String,
-      avatar: json['avatar'] as String,
-      nickname: json['nickname'] as String,
-      fav: json['fav'] as int,
-      like: json['like'] as int,
-      comment: json['comment'] as int? ?? 0, // Optional: defaults to 0 if not present
-      tags: (json['tags'] as List<dynamic>).map((e) => e as String).toList(),
+      id: asString(json['id']),
+      uid: asString(json['uid']),
+      cover: asString(json['cover']),
+      title: asString(json['title']),
+      content: asString(json['content']),
+      avatar: asString(json['avatar']),
+      nickname: asString(json['nickname']),
+      fav: asInt(json['fav']),
+      like: asInt(json['like']),
+      comment: asInt(json['comment']),
+      tags: tags,
     );
   }
 
