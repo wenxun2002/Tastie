@@ -36,6 +36,42 @@ service cloud.firestore {
         return /databases/$(database)/documents/users/$(request.auth.uid)/collections/$(recipeId);
       }
 
+      // Legacy / imported recipes may omit likeCount/favCount. Treat missing as 0
+      // so the first valid +1 engagement write can seed the field.
+      function currentLikeCountChangedBy(delta) {
+        return request.resource.data.keys().hasAny(['likeCount'])
+          && request.resource.data.likeCount is number
+          && request.resource.data.likeCount >= 0
+          && (
+            (
+              !resource.data.keys().hasAny(['likeCount'])
+              && request.resource.data.likeCount == delta
+            )
+            || (
+              resource.data.keys().hasAny(['likeCount'])
+              && resource.data.likeCount is number
+              && request.resource.data.likeCount == resource.data.likeCount + delta
+            )
+          );
+      }
+
+      function currentFavCountChangedBy(delta) {
+        return request.resource.data.keys().hasAny(['favCount'])
+          && request.resource.data.favCount is number
+          && request.resource.data.favCount >= 0
+          && (
+            (
+              !resource.data.keys().hasAny(['favCount'])
+              && request.resource.data.favCount == delta
+            )
+            || (
+              resource.data.keys().hasAny(['favCount'])
+              && resource.data.favCount is number
+              && request.resource.data.favCount == resource.data.favCount + delta
+            )
+          );
+      }
+
       function recipeCreateCountersValid() {
         let d = request.resource.data;
         return (!d.keys().hasAny(['likeCount']) || d.likeCount == 0)
@@ -73,39 +109,33 @@ service cloud.firestore {
       }
 
       function likeCountChangeValid() {
-        return resource.data.likeCount is number
-          && request.resource.data.likeCount is number
-          && request.resource.data.likeCount >= 0
-          && (
-            (
-              request.resource.data.likeCount == resource.data.likeCount + 1
-              && !exists(signedInUserLikePath())
-              && existsAfter(signedInUserLikePath())
-            )
-            || (
-              request.resource.data.likeCount == resource.data.likeCount - 1
-              && exists(signedInUserLikePath())
-              && !existsAfter(signedInUserLikePath())
-            )
-          );
+        return (
+          (
+            currentLikeCountChangedBy(1)
+            && !exists(signedInUserLikePath())
+            && existsAfter(signedInUserLikePath())
+          )
+          || (
+            currentLikeCountChangedBy(-1)
+            && exists(signedInUserLikePath())
+            && !existsAfter(signedInUserLikePath())
+          )
+        );
       }
 
       function favCountChangeValid() {
-        return resource.data.favCount is number
-          && request.resource.data.favCount is number
-          && request.resource.data.favCount >= 0
-          && (
-            (
-              request.resource.data.favCount == resource.data.favCount + 1
-              && !exists(signedInUserCollectionPath())
-              && existsAfter(signedInUserCollectionPath())
-            )
-            || (
-              request.resource.data.favCount == resource.data.favCount - 1
-              && exists(signedInUserCollectionPath())
-              && !existsAfter(signedInUserCollectionPath())
-            )
-          );
+        return (
+          (
+            currentFavCountChangedBy(1)
+            && !exists(signedInUserCollectionPath())
+            && existsAfter(signedInUserCollectionPath())
+          )
+          || (
+            currentFavCountChangedBy(-1)
+            && exists(signedInUserCollectionPath())
+            && !existsAfter(signedInUserCollectionPath())
+          )
+        );
       }
 
       function recipeCounterUpdateAllowed() {
@@ -186,15 +216,43 @@ service cloud.firestore {
       }
 
       function recipeExistsAndLikeCountChangedBy(targetRecipeId, delta) {
+        let before = get(/databases/$(database)/documents/recipes/$(targetRecipeId)).data;
+        let after = getAfter(/databases/$(database)/documents/recipes/$(targetRecipeId)).data;
         return exists(/databases/$(database)/documents/recipes/$(targetRecipeId))
-          && getAfter(/databases/$(database)/documents/recipes/$(targetRecipeId)).data.likeCount ==
-            get(/databases/$(database)/documents/recipes/$(targetRecipeId)).data.likeCount + delta;
+          && after.keys().hasAny(['likeCount'])
+          && after.likeCount is number
+          && after.likeCount >= 0
+          && (
+            (
+              !before.keys().hasAny(['likeCount'])
+              && after.likeCount == delta
+            )
+            || (
+              before.keys().hasAny(['likeCount'])
+              && before.likeCount is number
+              && after.likeCount == before.likeCount + delta
+            )
+          );
       }
 
       function recipeExistsAndFavCountChangedBy(targetRecipeId, delta) {
+        let before = get(/databases/$(database)/documents/recipes/$(targetRecipeId)).data;
+        let after = getAfter(/databases/$(database)/documents/recipes/$(targetRecipeId)).data;
         return exists(/databases/$(database)/documents/recipes/$(targetRecipeId))
-          && getAfter(/databases/$(database)/documents/recipes/$(targetRecipeId)).data.favCount ==
-            get(/databases/$(database)/documents/recipes/$(targetRecipeId)).data.favCount + delta;
+          && after.keys().hasAny(['favCount'])
+          && after.favCount is number
+          && after.favCount >= 0
+          && (
+            (
+              !before.keys().hasAny(['favCount'])
+              && after.favCount == delta
+            )
+            || (
+              before.keys().hasAny(['favCount'])
+              && before.favCount is number
+              && after.favCount == before.favCount + delta
+            )
+          );
       }
 
       function engagementDocCreateAllowed(targetRecipeId) {
