@@ -9,6 +9,7 @@ const {
 const {
   doc,
   getDoc,
+  increment,
   serverTimestamp,
   setDoc,
   updateDoc,
@@ -237,12 +238,13 @@ describe('firestore.rules', () => {
     const likeRef = doc(alice, 'users/alice/likes/legacy');
     const collectionRef = doc(alice, 'users/alice/collections/legacy');
 
+    // Match mobile RecipeEngagementRepository (FieldValue.increment).
     const likeBatch = writeBatch(alice);
     likeBatch.set(likeRef, {
       recipeId: 'legacy',
       createdAt: serverTimestamp(),
     });
-    likeBatch.update(recipeRef, {likeCount: 1});
+    likeBatch.update(recipeRef, {likeCount: increment(1)});
     await assertSucceeds(likeBatch.commit());
 
     const favoriteBatch = writeBatch(alice);
@@ -250,7 +252,7 @@ describe('firestore.rules', () => {
       recipeId: 'legacy',
       createdAt: serverTimestamp(),
     });
-    favoriteBatch.update(recipeRef, {favCount: 1});
+    favoriteBatch.update(recipeRef, {favCount: increment(1)});
     await assertSucceeds(favoriteBatch.commit());
   });
 
