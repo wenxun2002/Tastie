@@ -65,6 +65,13 @@ function baseRecipe(overrides = {}) {
   };
 }
 
+function legacyRecipeWithoutEngagementCounters(overrides = {}) {
+  const recipe = baseRecipe(overrides);
+  delete recipe.likeCount;
+  delete recipe.favCount;
+  return recipe;
+}
+
 describe('firestore.rules', () => {
   before(async () => {
     testEnv = await initializeTestEnvironment({
@@ -221,6 +228,47 @@ describe('firestore.rules', () => {
     unfavoriteBatch.delete(collectionRef);
     unfavoriteBatch.update(recipeRef, {favCount: 0});
     await assertSucceeds(unfavoriteBatch.commit());
+  });
+
+  it('allows first like and favorite on legacy recipes without counters', async () => {
+    await seedDoc('recipes/legacy', legacyRecipeWithoutEngagementCounters());
+    const alice = authedDb('alice');
+    const recipeRef = doc(alice, 'recipes/legacy');
+    const likeRef = doc(alice, 'users/alice/likes/legacy');
+    const collectionRef = doc(alice, 'users/alice/collections/legacy');
+
+    const likeBatch = writeBatch(alice);
+    likeBatch.set(likeRef, {
+      recipeId: 'legacy',
+      createdAt: serverTimestamp(),
+    });
+    likeBatch.update(recipeRef, {likeCount: 1});
+    await assertSucceeds(likeBatch.commit());
+
+    const favoriteBatch = writeBatch(alice);
+    favoriteBatch.set(collectionRef, {
+      recipeId: 'legacy',
+      createdAt: serverTimestamp(),
+    });
+    favoriteBatch.update(recipeRef, {favCount: 1});
+    await assertSucceeds(favoriteBatch.commit());
+  });
+
+  it('rejects invalid first counter writes on legacy recipes', async () => {
+    await seedDoc('recipes/legacy', legacyRecipeWithoutEngagementCounters());
+    const alice = authedDb('alice');
+    const recipeRef = doc(alice, 'recipes/legacy');
+    const likeRef = doc(alice, 'users/alice/likes/legacy');
+
+    await assertFails(updateDoc(recipeRef, {likeCount: 1}));
+
+    const inflatedLikeBatch = writeBatch(alice);
+    inflatedLikeBatch.set(likeRef, {
+      recipeId: 'legacy',
+      createdAt: serverTimestamp(),
+    });
+    inflatedLikeBatch.update(recipeRef, {likeCount: 2});
+    await assertFails(inflatedLikeBatch.commit());
   });
 
   it('allows only admins to change report status', async () => {
