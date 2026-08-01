@@ -647,6 +647,10 @@ const CLICK_SOURCE_VALUES = new Set([
 /**
  * Seeds `click_metrics` from legacy `clicked` when missing, then increments
  * the bucket + total for ML telemetry (written by mobile app).
+ *
+ * Must be transactional and idempotent: Firestore create triggers are
+ * at-least-once, and a non-transactional seed `set` can clobber concurrent
+ * first-click increments on legacy recipes that only have `clicked`.
  */
 export const aggregateRecipeClickMetricsOnEventCreate = onDocumentCreated(
   {
@@ -668,44 +672,64 @@ export const aggregateRecipeClickMetricsOnEventCreate = onDocumentCreated(
       return;
     }
 
+    const eventRef = snap.ref;
     const recipeRef = db.collection(RECIPES_COLLECTION).doc(recipeId);
-    const recipeSnap = await recipeRef.get();
-    if (!recipeSnap.exists) {
-      logger.warn("recipe_click_events: recipe not found", {recipeId});
-      return;
-    }
 
-    const recipeData = recipeSnap.data() ?? {};
-    const cm = recipeData["click_metrics"];
-    const needsSeed =
-      cm === undefined || cm === null || typeof cm !== "object";
-
-    if (needsSeed) {
-      const rawLegacy = recipeData["clicked"];
-      let legacyClicked = 0;
-      if (typeof rawLegacy === "number") {
-        legacyClicked = rawLegacy;
-      } else if (typeof rawLegacy === "string") {
-        legacyClicked = Number.parseInt(rawLegacy, 10) || 0;
+    await db.runTransaction(async (transaction) => {
+      const eventSnap = await transaction.get(eventRef);
+      if (!eventSnap.exists) {
+        return;
+      }
+      // Prior successful delivery already counted this event.
+      if (eventSnap.get("aggregated") === true) {
+        return;
       }
 
-      await recipeRef.set(
-        {
-          click_metrics: {
-            weather_promoted: 0,
-            weather_notpromoted: 0,
-            normal_browse: 0,
-            search: 0,
-            total: legacyClicked,
-          },
-        },
-        {merge: true},
-      );
-    }
+      const recipeSnap = await transaction.get(recipeRef);
+      if (!recipeSnap.exists) {
+        logger.warn("recipe_click_events: recipe not found", {recipeId});
+        return;
+      }
 
-    await recipeRef.update({
-      [`click_metrics.${clickSource}`]: FieldValue.increment(1),
-      "click_metrics.total": FieldValue.increment(1),
+      const recipeData = recipeSnap.data() ?? {};
+      const cm = recipeData["click_metrics"];
+      const needsSeed =
+        cm === undefined || cm === null || typeof cm !== "object";
+
+      if (needsSeed) {
+        const rawLegacy = recipeData["clicked"];
+        let legacyClicked = 0;
+        if (typeof rawLegacy === "number") {
+          legacyClicked = rawLegacy;
+        } else if (typeof rawLegacy === "string") {
+          legacyClicked = Number.parseInt(rawLegacy, 10) || 0;
+        }
+
+        // Include this click in the seed so the event cannot be lost between
+        // seed and increment, and concurrent seeders cannot zero out buckets.
+        transaction.set(
+          recipeRef,
+          {
+            click_metrics: {
+              weather_promoted: clickSource === "weather_promoted" ? 1 : 0,
+              weather_notpromoted:
+                clickSource === "weather_notpromoted" ? 1 : 0,
+              normal_browse: clickSource === "normal_browse" ? 1 : 0,
+              search: clickSource === "search" ? 1 : 0,
+              total: legacyClicked + 1,
+            },
+          },
+          {merge: true},
+        );
+      } else {
+        transaction.update(recipeRef, {
+          [`click_metrics.${clickSource}`]: FieldValue.increment(1),
+          "click_metrics.total": FieldValue.increment(1),
+        });
+      }
+
+      // Admin SDK write; clients cannot update recipe_click_events.
+      transaction.update(eventRef, {aggregated: true});
     });
   },
 );
