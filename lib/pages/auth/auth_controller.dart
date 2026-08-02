@@ -54,14 +54,27 @@ class AuthController extends GetxController {
         return;
       }
 
+      // Profile must exist before Home unlocks: recipe create/update rules
+      // require users/{uid} (isNotBannedUser → exists). Never fire-and-forget.
+      await _userRepository.upsertFromAuthUser(user);
+
+      // Auth may have changed while awaiting Firestore.
+      if (_auth.currentUser?.uid != user.uid) {
+        return;
+      }
+
       currentUser.value = user;
       isSessionLoading.value = false;
       _bindProfileListener(user.uid);
-      _userRepository.upsertFromAuthUser(user);
     } catch (_) {
-      await _handleBannedAccount(showDialog: false);
+      // Transport / Firestore errors are not bans. Keep the Auth session so
+      // the user can retry without a full Google re-login.
+      if (_auth.currentUser?.uid == user.uid) {
+        currentUser.value = null;
+        isSessionLoading.value = false;
+      }
       Get.snackbar(
-        'Sign-in blocked',
+        'Connection issue',
         'Unable to verify account status. Please try again later.',
         snackPosition: SnackPosition.BOTTOM,
       );

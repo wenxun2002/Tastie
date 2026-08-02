@@ -22,6 +22,19 @@ function normalizeUserStatus(data: DocumentData): string {
 }
 
 /**
+ * Loads the current user profile used for moderation side effects.
+ * @param {string} uid Firebase Auth UID.
+ * @return {Promise<DocumentData | null>} Live user fields, or null if missing.
+ */
+async function readLiveUser(uid: string): Promise<DocumentData | null> {
+  const snap = await db.collection(USERS_COLLECTION).doc(uid).get();
+  if (!snap.exists) {
+    return null;
+  }
+  return snap.data() ?? {};
+}
+
+/**
  * Resolves the display name shown on restored recipe author fields.
  * @param {DocumentData} userData Firestore user document fields.
  * @return {string} Nickname for recipe author restoration.
@@ -60,28 +73,57 @@ async function setAuthDisabled(uid: string, disabled: boolean): Promise<void> {
 
 /**
  * Updates all recipes owned by [uid] with the given author nickname/avatar.
+ * Re-checks live status immediately before every batch commit so a rapid
+ * admin toggle aborts stale fan-out instead of overwriting the newer state.
  * @param {string} uid Recipe owner UID.
  * @param {string} nickname Author nickname to write.
  * @param {string} avatar Author avatar URL to write.
- * @return {Promise<number>} Number of recipe documents updated.
+ * @param {string} requiredStatus Status that must still be live to continue.
+ * @return {Promise<{updated: number, aborted: boolean}>} Progress + abort flag.
  */
 async function updateRecipesAuthor(
   uid: string,
   nickname: string,
   avatar: string,
-): Promise<number> {
+  requiredStatus: string,
+): Promise<{updated: number; aborted: boolean}> {
   const snap = await db
     .collection(RECIPES_COLLECTION)
     .where("userId", "==", uid)
     .get();
 
   if (snap.empty) {
-    return 0;
+    return {updated: 0, aborted: false};
   }
 
   let updated = 0;
   let batch = db.batch();
   let batchCount = 0;
+
+  /**
+   * Commits the current batch only if live status still matches.
+   * @return {Promise<boolean>} False when the fan-out must abort.
+   */
+  async function commitBatchIfCurrent(): Promise<boolean> {
+    if (batchCount === 0) {
+      return true;
+    }
+    const liveUser = await readLiveUser(uid);
+    const liveStatus = normalizeUserStatus(liveUser ?? {});
+    if (liveStatus !== requiredStatus) {
+      logger.warn("Aborting recipe author batch; status changed", {
+        uid,
+        requiredStatus,
+        liveStatus,
+        updatedSoFar: updated - batchCount,
+      });
+      return false;
+    }
+    await batch.commit();
+    batch = db.batch();
+    batchCount = 0;
+    return true;
+  }
 
   for (const doc of snap.docs) {
     batch.update(doc.ref, {
@@ -94,17 +136,98 @@ async function updateRecipesAuthor(
     batchCount += 1;
 
     if (batchCount >= BATCH_LIMIT) {
-      await batch.commit();
-      batch = db.batch();
-      batchCount = 0;
+      const committed = await commitBatchIfCurrent();
+      if (!committed) {
+        return {updated: updated - batchCount, aborted: true};
+      }
     }
   }
 
   if (batchCount > 0) {
-    await batch.commit();
+    const committed = await commitBatchIfCurrent();
+    if (!committed) {
+      return {updated: updated - batchCount, aborted: true};
+    }
   }
 
-  return updated;
+  return {updated, aborted: false};
+}
+
+/**
+ * Converges Auth + recipe authors to the *live* user status.
+ *
+ * Triggers capture before/after from a specific write, but rapid admin toggles
+ * can run concurrently. Always re-reading status (and reconciling at the end)
+ * prevents a stale ban/restore event from leaving Auth disabled or authors
+ * anonymized after the user was restored (or the reverse).
+ *
+ * Retries a few times when a newer toggle wins mid-fan-out so this invocation
+ * still converges mixed recipe authors to the latest status.
+ * @param {string} uid Firebase Auth UID.
+ * @return {Promise<void>} Resolves when convergence finishes.
+ */
+async function syncModerationToLiveStatus(uid: string): Promise<void> {
+  const maxAttempts = 3;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    const liveUser = await readLiveUser(uid);
+    if (!liveUser) {
+      logger.warn("Moderation sync skipped; user doc missing", {uid});
+      return;
+    }
+
+    const intendedStatus = normalizeUserStatus(liveUser);
+    await setAuthDisabled(uid, intendedStatus === "banned");
+
+    // A newer toggle may have landed while Auth was updating.
+    const afterAuthUser = await readLiveUser(uid);
+    if (!afterAuthUser) {
+      return;
+    }
+    const statusForRecipes = normalizeUserStatus(afterAuthUser);
+    if (statusForRecipes !== intendedStatus) {
+      await setAuthDisabled(uid, statusForRecipes === "banned");
+    }
+
+    const nickname = statusForRecipes === "banned" ?
+      BANNED_AUTHOR_NICKNAME :
+      resolveAuthorNickname(afterAuthUser);
+    const avatar = statusForRecipes === "banned" ?
+      "" :
+      resolveAuthorAvatar(afterAuthUser);
+
+    const {updated, aborted} = await updateRecipesAuthor(
+      uid,
+      nickname,
+      avatar,
+      statusForRecipes,
+    );
+
+    // Always reconcile Auth to whatever is live now — even stale invocations
+    // must leave Auth aligned with the latest users/{uid}.status.
+    const finalUser = await readLiveUser(uid);
+    const finalStatus = normalizeUserStatus(finalUser ?? {});
+    await setAuthDisabled(uid, finalStatus === "banned");
+
+    if (!aborted && finalStatus === statusForRecipes) {
+      logger.info(
+        finalStatus === "banned" ? "User banned" : "User restored",
+        {uid, recipeCount: updated, nickname, attempt},
+      );
+      return;
+    }
+
+    logger.info("Moderation sync retrying after newer status won", {
+      uid,
+      statusForRecipes,
+      finalStatus,
+      recipeCount: updated,
+      aborted,
+      attempt,
+    });
+  }
+
+  logger.warn("Moderation sync exhausted retries", {uid, maxAttempts});
 }
 
 /**
@@ -130,23 +253,12 @@ export const moderateUserOnStatusChange = onDocumentUpdated(
 
     const uid = event.params.userId;
 
-    if (nextStatus === "banned") {
-      await setAuthDisabled(uid, true);
-      const recipeCount = await updateRecipesAuthor(
-        uid,
-        BANNED_AUTHOR_NICKNAME,
-        "",
-      );
-      logger.info("User banned", {uid, recipeCount});
-      return;
-    }
-
-    if (nextStatus === "active" && previousStatus === "banned") {
-      await setAuthDisabled(uid, false);
-      const nickname = resolveAuthorNickname(after);
-      const avatar = resolveAuthorAvatar(after);
-      const recipeCount = await updateRecipesAuthor(uid, nickname, avatar);
-      logger.info("User restored", {uid, recipeCount, nickname});
+    // Ban, or restore from banned → active. Other transitions are ignored.
+    if (
+      nextStatus === "banned" ||
+      (nextStatus === "active" && previousStatus === "banned")
+    ) {
+      await syncModerationToLiveStatus(uid);
     }
   },
 );
