@@ -387,9 +387,15 @@ class IndexController extends GetxController
   }
 
   Future<void> _reloadExploreFirstPageWithFilter() async {
+    // Enter skeleton loading before clearing so masonry childCount cannot
+    // outlive an empty `data` list during the async fetch (RangeError).
+    isInitialLoading = true;
+    isDataReady = false;
     data = [];
     _resetExplorePaginationState();
     hasMore = true;
+    isFetchingMore = false;
+    update(['post_list']);
     try {
       if (currentWeatherCategory == WeatherCategory.neutral) {
         await _pullNeutralPopularBatch(forLoadMore: false);
@@ -397,11 +403,15 @@ class IndexController extends GetxController
         await _bootstrapWeatherTaggedFeed();
       }
       await _loadLikedRecipeIds();
+      isDataReady = true;
+      update(['post_list']);
     } catch (_) {
       data = [];
       _resetExplorePaginationState();
       hasMore = false;
       await _loadLikedRecipeIds();
+      isDataReady = true;
+      update(['post_list']);
     }
   }
 
@@ -438,7 +448,12 @@ class IndexController extends GetxController
 
   /// bottom load: neutral by like count; non-neutral by [FetchStage] (promoted → neutral → suppressed).
   Future<void> loadMorePosts() async {
-    if (!hasMore || isFetchingMore) return;
+    if (!hasMore ||
+        isFetchingMore ||
+        isWeatherSwitching ||
+        isInitialLoading) {
+      return;
+    }
 
     if (currentWeatherCategory == WeatherCategory.neutral) {
       isFetchingMore = true;
@@ -496,7 +511,7 @@ class IndexController extends GetxController
     exploreFilterPromotedTags = List<String>.from(policy.promoted.take(10));
     exploreNeutralTags = List<String>.from(policy.neutral);
     exploreSuppressedTags = List<String>.from(policy.suppressed);
-    update(['weather_selector', 'post_list']);
+    update(['weather_selector']);
 
     try {
       await _reloadExploreFirstPageWithFilter();
