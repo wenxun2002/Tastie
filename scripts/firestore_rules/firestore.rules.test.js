@@ -244,4 +244,27 @@ describe('firestore.rules', () => {
       status: 'pending',
     }));
   });
+
+  it('requires recipe createdAt to be server time on create', async () => {
+    await seedDoc('users/alice', {uid: 'alice', status: 'active'});
+    const alice = authedDb('alice');
+    const recipe = baseRecipe({userId: 'alice', authorUid: 'alice'});
+
+    await assertFails(setDoc(doc(alice, 'recipes/future'), {
+      ...recipe,
+      createdAt: new Date('2099-01-01T00:00:00Z'),
+    }));
+    await assertFails(setDoc(doc(alice, 'recipes/past'), {
+      ...recipe,
+      createdAt: new Date('2020-01-01T00:00:00Z'),
+    }));
+
+    const {createdAt: _ignored, ...withoutCreatedAt} = recipe;
+    await assertFails(setDoc(doc(alice, 'recipes/missing'), withoutCreatedAt));
+
+    await assertSucceeds(setDoc(doc(alice, 'recipes/ok'), {
+      ...recipe,
+      createdAt: serverTimestamp(),
+    }));
+  });
 });

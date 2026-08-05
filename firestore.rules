@@ -59,6 +59,10 @@ service cloud.firestore {
           && d.userId == request.auth.uid
           && (!d.keys().hasAny(['authorUid']) || d.authorUid == request.auth.uid)
           && (!d.keys().hasAny(['status']) || d.status == 'active')
+          // createdAt must be server time so clients cannot pin spam to the top
+          // of Explore/Search freshness ranking with a future timestamp.
+          && d.keys().hasAll(['createdAt'])
+          && d.createdAt == request.time
           && recipeCreateCountersValid();
       }
 
