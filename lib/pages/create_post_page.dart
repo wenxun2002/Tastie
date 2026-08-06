@@ -157,7 +157,8 @@ class _CreatePostPageState extends State<CreatePostPage> {
       return;
     }
 
-    setState(() => _isSmartGenerating = true);
+    _isSmartGenerating = true;
+    setState(() {});
     try {
       var imagesPayload = const <Map<String, String>>[];
       if (_photos.isNotEmpty) {
@@ -301,6 +302,10 @@ class _CreatePostPageState extends State<CreatePostPage> {
   }
 
   void _handleNextPressed() {
+    // Button onPressed is nulled after rebuild, but rapid taps can race before
+    // setState from an in-flight submit/smart-generate lands.
+    if (_isSubmitting || _isSmartGenerating) return;
+
     switch (_currentStep) {
       case CreatePostStep.post:
         if (_titleController.text.trim().isEmpty) {
@@ -349,6 +354,8 @@ class _CreatePostPageState extends State<CreatePostPage> {
   }
 
   void _handleBackPressed() {
+    if (_isSubmitting || _isSmartGenerating) return;
+
     switch (_currentStep) {
       case CreatePostStep.post:
         Get.back<void>();
@@ -371,6 +378,10 @@ class _CreatePostPageState extends State<CreatePostPage> {
   }
 
   Future<void> _submit() async {
+    // Re-entrancy guard: UI disable alone is not enough against double-taps
+    // that both enter before the first setState rebuilds.
+    if (_isSubmitting) return;
+
     // 1. local validation (no network trigger)
     final data = _buildCreatePostData();
     if (data.title.trim().isEmpty) {
@@ -394,9 +405,9 @@ class _CreatePostPageState extends State<CreatePostPage> {
       return;
     }
 
-    // 2.  Enter submission state
+    // 2.  Enter submission state (sync flag before await so a second call bails)
+    _isSubmitting = true;
     setState(() {
-      _isSubmitting = true;
       _submitError = null;
       _submitProgress = 'Preparing...';
     });
@@ -639,85 +650,87 @@ class _CreatePostPageState extends State<CreatePostPage> {
       overlay = const SizedBox.shrink();
     }
 
-    return Stack(
-      children: [
-        Scaffold(
-          backgroundColor: Colors.white,
-          body: SafeArea(
-            child: Column(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      IconButton(
-                        icon: const Icon(Icons.arrow_back),
-                        onPressed: _handleBackPressed,
-                      ),
-                      PrimaryButton(
-                        text: isLastStep ? 'Submit' : 'Next',
-                        onPressed:
-                            (_isSubmitting || _isSmartGenerating)
-                                ? null
-                                : _handleNextPressed,
-                      ),
-                    ],
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  child: _StepProgressBar(
-                    currentStep: _currentStep,
-                    controller: _stepProgressController,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Expanded(
-                  child: AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 350),
-                    transitionBuilder: (child, animation) {
-                      final direction = _stepTransitionDirection;
-                      final offsetAnimation =
-                          Tween<Offset>(
-                            begin: Offset(0.1 * direction, 0),
-                            end: Offset.zero,
-                          ).animate(
-                            CurvedAnimation(
-                              parent: animation,
-                              curve: Curves.easeOutCubic,
-                            ),
-                          );
-                      return FadeTransition(
-                        opacity: animation,
-                        child: SlideTransition(
-                          position: offsetAnimation,
-                          child: child,
+    final bool blockExit = _isSubmitting || _isSmartGenerating;
+
+    return PopScope(
+      canPop: !blockExit,
+      child: Stack(
+        children: [
+          Scaffold(
+            backgroundColor: Colors.white,
+            body: SafeArea(
+              child: Column(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.arrow_back),
+                          onPressed: blockExit ? null : _handleBackPressed,
                         ),
-                      );
-                    },
-                    layoutBuilder: (currentChild, previousChildren) {
-                      return Stack(
-                        alignment: Alignment.topCenter,
-                        children: [
-                          ...previousChildren,
-                          if (currentChild != null) currentChild,
-                        ],
-                      );
-                    },
-                    child: KeyedSubtree(
-                      key: ValueKey(_currentStep),
-                      child: _buildStepContent(theme),
+                        PrimaryButton(
+                          text: isLastStep ? 'Submit' : 'Next',
+                          onPressed: blockExit ? null : _handleNextPressed,
+                        ),
+                      ],
                     ),
                   ),
-                ),
-              ],
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: _StepProgressBar(
+                      currentStep: _currentStep,
+                      controller: _stepProgressController,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Expanded(
+                    child: AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 350),
+                      transitionBuilder: (child, animation) {
+                        final direction = _stepTransitionDirection;
+                        final offsetAnimation =
+                            Tween<Offset>(
+                              begin: Offset(0.1 * direction, 0),
+                              end: Offset.zero,
+                            ).animate(
+                              CurvedAnimation(
+                                parent: animation,
+                                curve: Curves.easeOutCubic,
+                              ),
+                            );
+                        return FadeTransition(
+                          opacity: animation,
+                          child: SlideTransition(
+                            position: offsetAnimation,
+                            child: child,
+                          ),
+                        );
+                      },
+                      layoutBuilder: (currentChild, previousChildren) {
+                        return Stack(
+                          alignment: Alignment.topCenter,
+                          children: [
+                            ...previousChildren,
+                            if (currentChild != null) currentChild,
+                          ],
+                        );
+                      },
+                      child: KeyedSubtree(
+                        key: ValueKey(_currentStep),
+                        child: _buildStepContent(theme),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
-        ),
-        overlay,
-      ],
+          overlay,
+        ],
+      ),
     );
   }
 
