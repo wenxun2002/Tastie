@@ -41,21 +41,75 @@ function resolveAuthorAvatar(userData: DocumentData): string {
 }
 
 /**
+ * Returns true when Admin Auth reports the UID does not exist.
+ * @param {unknown} error Auth error from firebase-admin.
+ * @return {boolean} Whether the error is auth/user-not-found.
+ */
+function isAuthUserNotFound(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as {code?: string}).code === "auth/user-not-found"
+  );
+}
+
+/**
  * Enables or disables Firebase Auth for the given UID.
+ *
+ * Must not swallow transient failures: the Firestore trigger otherwise
+ * completes successfully, so Auth stays permanently out of sync with
+ * `users/{uid}.status` (banned user still minting tokens, or restored
+ * user stuck `disabled`).
+ *
  * @param {string} uid Firebase Auth UID.
  * @param {boolean} disabled Whether the account should be disabled.
- * @return {Promise<void>} Resolves when Auth is updated or logs a warning.
+ * @return {Promise<void>} Resolves when Auth is updated.
  */
 async function setAuthDisabled(uid: string, disabled: boolean): Promise<void> {
-  try {
-    await getAuth().updateUser(uid, {disabled});
-  } catch (error) {
-    logger.warn("Failed to update Auth disabled state", {
-      uid,
-      disabled,
-      error: String(error),
-    });
+  const maxAttempts = 3;
+  let lastError: unknown;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      await getAuth().updateUser(uid, {disabled});
+      if (disabled) {
+        // Best-effort: shrink the stale-token window after a successful ban.
+        try {
+          await getAuth().revokeRefreshTokens(uid);
+        } catch (revokeError) {
+          logger.warn("Failed to revoke refresh tokens after disable", {
+            uid,
+            error: String(revokeError),
+          });
+        }
+      }
+      return;
+    } catch (error) {
+      lastError = error;
+      if (isAuthUserNotFound(error)) {
+        // Orphaned profile with no Auth user: cannot toggle disabled.
+        logger.warn("Auth user missing; skipping disabled toggle", {
+          uid,
+          disabled,
+        });
+        return;
+      }
+      logger.warn("Failed to update Auth disabled state", {
+        uid,
+        disabled,
+        attempt,
+        error: String(error),
+      });
+      if (attempt < maxAttempts) {
+        await new Promise((resolve) => setTimeout(resolve, 250 * attempt));
+      }
+    }
   }
+
+  throw new Error(
+    `Failed to set Auth disabled=${disabled} for ${uid}: ${String(lastError)}`,
+  );
 }
 
 /**
@@ -114,6 +168,9 @@ export const moderateUserOnStatusChange = onDocumentUpdated(
   {
     ...FIRESTORE_TRIGGER_OPTS,
     document: `${USERS_COLLECTION}/{userId}`,
+    // Auth sync failures must be redelivered; handler is idempotent for
+    // a stable status (re-disable / re-anonymize is a no-op).
+    retry: true,
   },
   async (event) => {
     const before = event.data?.before.data();
