@@ -62,14 +62,27 @@ service cloud.firestore {
           && recipeCreateCountersValid();
       }
 
+      // Legacy docs omit status; treat missing as active (same as catalog policy).
+      function recipeIsActiveForOwner() {
+        return !resource.data.keys().hasAny(['status'])
+          || resource.data.status == 'active';
+      }
+
       function recipeOwnerUpdateAllowed() {
         let affected = request.resource.data.diff(resource.data).affectedKeys();
         return isSignedIn()
           && resource.data.userId == request.auth.uid
+          && recipeIsActiveForOwner()
           && affected.hasOnly([
             'author', 'imageUrls', 'title', 'content', 'tags',
             'ingredients', 'procedures', 'nutrition'
           ]);
+      }
+
+      function recipeOwnerDeleteAllowed() {
+        return isSignedIn()
+          && resource.data.userId == request.auth.uid
+          && recipeIsActiveForOwner();
       }
 
       function likeCountChangeValid() {
@@ -139,7 +152,10 @@ service cloud.firestore {
         || recipeCounterUpdateAllowed()
         || recipeAdminStatusUpdateAllowed()
         || recipeAdminAuthorUpdateAllowed();
-      allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+      // Owners may delete only active recipes. Banned recipes stay locked so
+      // authors cannot delete+recreate the same ID as `active` to evade moderation.
+      // Admins may delete any recipe (including banned) for cleanup.
+      allow delete: if recipeOwnerDeleteAllowed() || isAdmin();
     }
 
     // --- User profile + per-user likes / collections ---

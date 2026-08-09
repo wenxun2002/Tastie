@@ -7,6 +7,7 @@ const {
   initializeTestEnvironment,
 } = require('@firebase/rules-unit-testing');
 const {
+  deleteDoc,
   doc,
   getDoc,
   serverTimestamp,
@@ -221,6 +222,39 @@ describe('firestore.rules', () => {
     unfavoriteBatch.delete(collectionRef);
     unfavoriteBatch.update(recipeRef, {favCount: 0});
     await assertSucceeds(unfavoriteBatch.commit());
+  });
+
+  it('locks banned recipes so owners cannot edit or delete+recreate them', async () => {
+    await seedDoc('users/alice', {uid: 'alice', status: 'active'});
+    await seedDoc('users/admin', {uid: 'admin', role: 'admin'});
+    await seedDoc('recipes/r-banned', baseRecipe({status: 'banned'}));
+
+    const alice = authedDb('alice');
+    const bannedRef = doc(alice, 'recipes/r-banned');
+
+    await assertFails(updateDoc(bannedRef, {title: 'still editable?'}));
+    await assertFails(deleteDoc(bannedRef));
+
+    // Same-ID recreate would unban the recipe if delete were allowed.
+    await assertFails(setDoc(bannedRef, baseRecipe({
+      status: 'active',
+      title: 'Back from ban',
+    })));
+
+    // Admins can still delete banned recipes for cleanup.
+    await assertSucceeds(deleteDoc(doc(authedDb('admin'), 'recipes/r-banned')));
+  });
+
+  it('still allows owners to delete their active recipes', async () => {
+    await seedDoc('users/alice', {uid: 'alice', status: 'active'});
+    await seedDoc('recipes/r-active', baseRecipe({status: 'active'}));
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      const {status, ...legacy} = baseRecipe();
+      await setDoc(doc(context.firestore(), 'recipes/r-legacy'), legacy);
+    });
+
+    await assertSucceeds(deleteDoc(doc(authedDb('alice'), 'recipes/r-active')));
+    await assertSucceeds(deleteDoc(doc(authedDb('alice'), 'recipes/r-legacy')));
   });
 
   it('allows only admins to change report status', async () => {
