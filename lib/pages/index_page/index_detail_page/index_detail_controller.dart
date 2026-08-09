@@ -290,6 +290,9 @@ class IndexDetailController extends GetxController {
     return user.uid == recipe.userId;
   }
 
+  /// Owners may delete active recipes only; banned docs are locked by rules.
+  bool get canDeleteOwnPost => isOwnPost && !recipe.isHiddenFromPublicCatalog;
+
   bool get canReport {
     final auth = Get.find<AuthController>();
     if (auth.currentUser.value == null) return false;
@@ -315,6 +318,16 @@ class IndexDetailController extends GetxController {
     if (!isOwnPost) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('You can only delete your own recipe.')),
+      );
+      return;
+    }
+    if (!canDeleteOwnPost) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'This recipe was removed by moderation and cannot be deleted.',
+          ),
+        ),
       );
       return;
     }

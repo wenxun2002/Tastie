@@ -90,7 +90,7 @@ class _IndexDetailPageState extends State<IndexDetailPage>
                   controller.share();
                 },
               ),
-              if (controller.isOwnPost)
+              if (controller.canDeleteOwnPost)
                 ListTile(
                   leading: const Icon(Icons.delete_outline, color: Colors.red),
                   title: Text('Delete', style: ColorPlate.bodyText.copyWith(color: Colors.red)),
