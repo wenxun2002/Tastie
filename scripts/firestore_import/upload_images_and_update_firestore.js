@@ -25,6 +25,35 @@ function isObject(v) {
   return v !== null && typeof v === 'object' && !Array.isArray(v);
 }
 
+/**
+ * Firestore sentinel / value types must not be walked as plain maps.
+ * `Object.entries(Timestamp)` yields `_seconds`/`_nanoseconds`; writing that
+ * plain object back via `set(..., {merge:false})` stores a **map** instead of
+ * a timestamp, which drops recipes from `orderBy('createdAt')` / range queries.
+ */
+function isFirestoreValueType(v) {
+  if (v == null || typeof v !== 'object') return false;
+  if (typeof Buffer !== 'undefined' && Buffer.isBuffer(v)) return true;
+  // Prefer instanceof when admin is initialized; also match by constructor
+  // name so unit-style checks work before initAdmin().
+  try {
+    const fs = admin.firestore;
+    if (v instanceof fs.Timestamp) return true;
+    if (v instanceof fs.GeoPoint) return true;
+    if (v instanceof fs.DocumentReference) return true;
+    if (typeof fs.Blob === 'function' && v instanceof fs.Blob) return true;
+  } catch {
+    // admin not ready
+  }
+  const name = v.constructor?.name;
+  return (
+    name === 'Timestamp' ||
+    name === 'GeoPoint' ||
+    name === 'DocumentReference' ||
+    name === 'Blob'
+  );
+}
+
 function initAdmin() {
   if (!fs.existsSync(serviceAccountPath)) {
     throw new Error(
@@ -92,6 +121,10 @@ function replaceAssetPaths(value, mapping) {
   }
   if (Array.isArray(value)) {
     return value.map((v) => replaceAssetPaths(v, mapping));
+  }
+  // Do not recurse into Timestamp / GeoPoint / DocumentReference / Blob / Buffer.
+  if (isFirestoreValueType(value)) {
+    return value;
   }
   if (isObject(value)) {
     const out = {};
@@ -183,6 +216,42 @@ async function buildAssetPathMapping(assetPaths, bucket) {
 }
 
 async function main() {
+  if (args.has('--self-test')) {
+    // Regression: Timestamp must survive replaceAssetPaths (not become a plain map).
+    const { Timestamp, GeoPoint } = admin.firestore;
+    const createdAt = new Timestamp(1_700_000_000, 123_000_000);
+    const loc = new GeoPoint(1.23, 4.56);
+    const mapping = {
+      'assets/images/soup.jpg': 'https://cdn.example/soup.jpg',
+    };
+    const before = {
+      title: 'Soup',
+      createdAt,
+      loc,
+      imageUrls: ['assets/images/soup.jpg'],
+      author: { nickname: 'A', avatar: '' },
+      tags: ['Comfort'],
+    };
+    const after = replaceAssetPaths(before, mapping);
+    if (!(after.createdAt instanceof Timestamp)) {
+      throw new Error('self-test failed: createdAt lost Timestamp type');
+    }
+    if (!(after.loc instanceof GeoPoint)) {
+      throw new Error('self-test failed: GeoPoint lost type');
+    }
+    if (after.createdAt.seconds !== createdAt.seconds) {
+      throw new Error('self-test failed: Timestamp seconds changed');
+    }
+    if (after.imageUrls[0] !== mapping['assets/images/soup.jpg']) {
+      throw new Error('self-test failed: asset path not replaced');
+    }
+    if (after.title !== 'Soup' || after.author.nickname !== 'A') {
+      throw new Error('self-test failed: unrelated fields mutated');
+    }
+    console.log('self-test OK: Timestamp/GeoPoint preserved; asset paths rewritten');
+    return;
+  }
+
   console.log(`Repo root: ${repoRoot}`);
   console.log(`Assets images dir: ${assetsImagesDir}`);
   console.log(`Mode: ${resolveModeLabel()}`);
@@ -233,8 +302,9 @@ async function main() {
       const latestNewData = replaceAssetPaths(latestData, mapping);
       if (!hasChanges(latestData, latestNewData)) return false;
 
-      // Replacing the whole latest document keeps nested arrays/maps exact while
-      // the transaction protects writes that land after the initial collection scan.
+      // Preserve Firestore value types (Timestamp, etc.) via replaceAssetPaths.
+      // Full-document set keeps nested array/map path rewrites exact while the
+      // transaction protects against writes that land after the initial scan.
       txn.set(ref, latestNewData, { merge: false });
       return true;
     });
