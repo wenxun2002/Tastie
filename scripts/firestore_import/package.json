@@ -15,6 +15,7 @@
     "mock:cleanup:apply": "node deleteMockRecipes.js --apply",
     "migrate-images": "node upload_images_and_update_firestore.js",
     "migrate-images:dry-run": "node upload_images_and_update_firestore.js --dry-run",
+    "migrate-images:self-test": "node upload_images_and_update_firestore.js --self-test",
     "sync-auth-users": "node sync_auth_users_to_firestore.js",
     "sync-auth-users:dry-run": "node sync_auth_users_to_firestore.js --dry-run"
   },
