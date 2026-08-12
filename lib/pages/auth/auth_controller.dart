@@ -94,17 +94,21 @@ class AuthController extends GetxController {
     }
     _isHandlingBan = true;
 
-    await _profileSub?.cancel();
-    _profileSub = null;
-    currentUser.value = null;
-    isSessionLoading.value = false;
-    await _signOutSilently();
+    // Always clear the flag: a thrown sign-out / dialog must not permanently
+    // disable live ban handling or leave AuthGate stuck on isSessionLoading.
+    try {
+      await _profileSub?.cancel();
+      _profileSub = null;
+      currentUser.value = null;
+      isSessionLoading.value = false;
+      await _signOutSilently();
 
-    if (showDialog) {
-      await BannedAccountDialog.show();
+      if (showDialog) {
+        await BannedAccountDialog.show();
+      }
+    } finally {
+      _isHandlingBan = false;
     }
-
-    _isHandlingBan = false;
   }
 
   /// Native Google Sign-In flow (google_sign_in 6.x).
@@ -177,8 +181,14 @@ class AuthController extends GetxController {
   }
 
   Future<void> _signOutSilently() async {
-    await _googleSignIn.signOut();
-    await _auth.signOut();
+    // Best-effort: Google sign-out can fail on network / Play Services issues.
+    // Still attempt Firebase Auth sign-out so a banned session does not linger.
+    try {
+      await _googleSignIn.signOut();
+    } catch (_) {}
+    try {
+      await _auth.signOut();
+    } catch (_) {}
   }
 
   String _mapAuthError(FirebaseAuthException e) {
